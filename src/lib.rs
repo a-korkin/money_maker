@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{Duration, NaiveDateTime};
 use csv;
 use plotters::prelude::*;
 use reqwest;
@@ -75,8 +75,8 @@ pub async fn draw_candles(candles: Vec<Candle>) {
     let root = BitMapBackend::new("graphs/stock.png", (1024, 768)).into_drawing_area();
     root.fill(&WHITE).unwrap();
 
-    let to_date = candles.last().unwrap().end;
-    let from_date = candles[0].end;
+    let to_date = candles.last().unwrap().end + Duration::minutes(10);
+    let from_date = candles[0].end - Duration::minutes(10);
 
     let mut chart = ChartBuilder::on(&root)
         .x_label_area_size(40)
@@ -86,8 +86,7 @@ pub async fn draw_candles(candles: Vec<Candle>) {
         .unwrap();
 
     chart
-        .configure_mesh()
-        .light_line_style(WHITE)
+        .configure_mesh() // .light_line_style(WHITE)
         .draw()
         .unwrap();
 
@@ -100,7 +99,7 @@ pub async fn draw_candles(candles: Vec<Candle>) {
             x.close as f32,
             GREEN.filled(),
             RED.filled(),
-            15,
+            7,
         )
     });
 
