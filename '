@@ -62,9 +62,52 @@ pub async fn read_csv(path: &str) -> Vec<Candle> {
         .from_path(path)
         .expect("failed to read csv");
 
-    rdr.deserialize::<Candle>()
+    // for result in rdr.deserialize::<Candle>() {
+    //     println!("{:?}", result);
+    // }
+
+    let result = rdr
+        .deserialize::<Candle>()
         .map(|c| c.unwrap())
-        .collect::<Vec<_>>()
+        .collect::<Vec<_>>();
+
+    return result;
+}
+
+pub async fn draw_ex() {
+    let dir = "graphs";
+    if !fs::exists(dir).unwrap() {
+        fs::create_dir_all(dir).unwrap();
+    }
+    let root = BitMapBackend::new("graphs/0.png", (640, 480)).into_drawing_area();
+    root.fill(&WHITE).unwrap();
+    let mut chart = ChartBuilder::on(&root)
+        .caption("y=x^2", ("sans-serif", 30).into_font())
+        .margin(5)
+        .x_label_area_size(30)
+        .y_label_area_size(30)
+        .build_cartesian_2d(-1f32..1f32, -0.1f32..1f32)
+        .unwrap();
+
+    chart.configure_mesh().draw().unwrap();
+
+    chart
+        .draw_series(LineSeries::new(
+            (-50..50).map(|x| x as f32 / 50.0).map(|x| (x, x * x)),
+            &RED,
+        ))
+        .unwrap()
+        .label("y = x^2")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+
+    chart
+        .configure_series_labels()
+        .background_style(&WHITE.mix(0.5))
+        .border_style(&BLACK)
+        .draw()
+        .unwrap();
+
+    root.present().unwrap();
 }
 
 pub async fn draw_candles(candles: Vec<Candle>) {
@@ -81,8 +124,8 @@ pub async fn draw_candles(candles: Vec<Candle>) {
     let mut chart = ChartBuilder::on(&root)
         .x_label_area_size(40)
         .y_label_area_size(40)
-        .caption("MSFT", ("sans-serif", 50.0).into_font())
-        .build_cartesian_2d(RangedDateTime::from(from_date..to_date), 210f32..225f32)
+        .caption("MSFT Stock Price", ("sans-serif", 50.0).into_font())
+        .build_cartesian_2d(RangedDateTime::from(from_date..to_date), 110f32..135f32)
         .unwrap();
 
     chart
@@ -90,20 +133,14 @@ pub async fn draw_candles(candles: Vec<Candle>) {
         .light_line_style(WHITE)
         .draw()
         .unwrap();
+    let d = candles.first().unwrap();
+    let c = CandleStick::new(&d.begin, d.open, d.high, d.low, d.close, &GREEN, &RED, 15);
 
-    let candles = candles.iter().map(|x| {
-        CandleStick::new(
-            x.begin,
-            x.open as f32,
-            x.high as f32,
-            x.low as f32,
-            x.close as f32,
-            GREEN.filled(),
-            RED.filled(),
-            15,
+    chart
+        .draw_series(
+            candles.iter().map(|*x| {
+                CandleStick::new(x.begin, x.open, x.high, x.low, x.close, &GREEN, &RED, 15)
+            }),
         )
-    });
-
-    chart.draw_series(candles).unwrap();
-    root.present().unwrap();
+        .unwrap();
 }
