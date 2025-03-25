@@ -1,5 +1,5 @@
 // use chrono::prelude::*;
-use money_maker::read_csv;
+use money_maker::draw_ex;
 use std::io;
 use tokio;
 
@@ -14,7 +14,8 @@ async fn main() -> io::Result<()> {
     // let url = format!("https://iss.moex.com/iss/engines/stock/markets/shares/securities/{security}/candles.csv?from={date}&till={date}&interval={interval}");
     // download(&url).await?;
 
-    read_csv("data/iss_moex/moex.csv");
+    // read_csv("data/iss_moex/moex.csv").await;
+    draw_ex().await;
 
     Ok(())
 }

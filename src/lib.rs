@@ -1,30 +1,11 @@
 use chrono::NaiveDateTime;
 use csv;
+use plotters::prelude::*;
 use reqwest;
 use serde::Deserialize;
 use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
-
-pub async fn download(url: &str) -> std::io::Result<()> {
-    let res = reqwest::get(url)
-        .await
-        .expect("failed to download file")
-        .text()
-        .await
-        .expect("failed to get csv");
-
-    let path = "data/iss_moex";
-    if !fs::exists(path).unwrap() {
-        fs::create_dir_all(path)?;
-    }
-    let file_name = "moex.csv";
-    let file_path = Path::new(path).join(file_name);
-    let mut file = fs::File::create(file_path)?;
-    file.write_all(res.as_bytes())?;
-
-    Ok(())
-}
 
 pub mod unix_timestamp {
     use chrono::NaiveDateTime;
@@ -55,22 +36,69 @@ pub struct Candle {
     pub end: NaiveDateTime,
 }
 
-pub fn read_csv(path: &str) {
+pub async fn download(url: &str) -> std::io::Result<()> {
+    let res = reqwest::get(url)
+        .await
+        .expect("failed to download file")
+        .text()
+        .await
+        .expect("failed to get csv");
+
+    let path = "data/iss_moex";
+    if !fs::exists(path)? {
+        fs::create_dir_all(path)?;
+    }
+    let file_name = "moex.csv";
+    let file_path = Path::new(path).join(file_name);
+    let mut file = fs::File::create(file_path)?;
+    file.write_all(res.as_bytes())?;
+
+    Ok(())
+}
+
+pub async fn read_csv(path: &str) {
     let mut rdr = csv::ReaderBuilder::new()
         .delimiter(b';')
         .from_path(path)
         .expect("failed to read csv");
 
-    // for record in rdr.records() {
-    //     let record = record.expect("failed to read record");
-    //     println!("{:?}", record);
-    // }
-
-    // let mut rdr = csv::Reader::from_path(path).unwrap();
-
     for result in rdr.deserialize::<Candle>() {
         println!("{:?}", result);
-        // let candle: Candle = result.unwrap();
-        // println!("{:?}", candle);
     }
+}
+
+pub async fn draw_ex() {
+    let dir = "graphs";
+    if !fs::exists(dir).unwrap() {
+        fs::create_dir_all(dir).unwrap();
+    }
+    let root = BitMapBackend::new("graphs/0.png", (640, 480)).into_drawing_area();
+    root.fill(&WHITE).unwrap();
+    let mut chart = ChartBuilder::on(&root)
+        .caption("y=x^2", ("sans-serif", 30).into_font())
+        .margin(5)
+        .x_label_area_size(30)
+        .y_label_area_size(30)
+        .build_cartesian_2d(-1f32..1f32, -0.1f32..1f32)
+        .unwrap();
+
+    chart.configure_mesh().draw().unwrap();
+
+    chart
+        .draw_series(LineSeries::new(
+            (-50..50).map(|x| x as f32 / 50.0).map(|x| (x, x * x)),
+            &RED,
+        ))
+        .unwrap()
+        .label("y = x^2")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+
+    chart
+        .configure_series_labels()
+        .background_style(&WHITE.mix(0.5))
+        .border_style(&BLACK)
+        .draw()
+        .unwrap();
+
+    root.present().unwrap();
 }
