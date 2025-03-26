@@ -1,44 +1,17 @@
 use chrono::prelude::*;
-use chrono::{Duration, NaiveDateTime};
+use chrono::Duration;
 use csv;
 use dotenv;
 use plotters::prelude::*;
 use reqwest;
-use serde::Deserialize;
 use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
 use std::thread;
 use std::time;
 
-pub mod unix_timestamp {
-    use chrono::NaiveDateTime;
-    use serde::{self, Deserialize, Deserializer};
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<NaiveDateTime, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let time: String = Deserialize::deserialize(deserializer)?;
-        let dt = NaiveDateTime::parse_from_str(&time, "%Y-%m-%d %H:%M:%S")
-            .map_err(serde::de::Error::custom)?;
-        Ok(dt)
-    }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Candle {
-    pub open: f32,
-    pub close: f32,
-    pub high: f32,
-    pub low: f32,
-    pub value: f32,
-    pub volume: f32,
-    #[serde(with = "unix_timestamp")]
-    pub begin: NaiveDateTime,
-    #[serde(with = "unix_timestamp")]
-    pub end: NaiveDateTime,
-}
+mod models;
+use models::common::Candle;
 
 pub async fn run(securities: Vec<&str>, date: DateTime<Utc>) -> std::io::Result<()> {
     dotenv::dotenv().ok();
