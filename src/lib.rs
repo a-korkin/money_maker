@@ -65,7 +65,7 @@ pub async fn download(url: &str, security: &str, file_name: &str) -> std::io::Re
     let mut file = fs::File::create(file_path)?;
     file.write_all(response.join("\n").as_bytes())?;
 
-    Ok(count as i64)
+    Ok((count - 1) as i64)
 }
 
 pub async fn read_csv(path: &str) -> Vec<Candle> {

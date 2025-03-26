@@ -17,15 +17,20 @@ async fn main() -> io::Result<()> {
     let iss_moex = dotenv::var("ISS_MOEX").expect("failed to read ISS_MOEX");
 
     let mut start: u32 = 0;
-    let mut added: i64 = 0;
     let mut i = 1;
-    while added >= 0 {
-        let url =
-            format!("{iss_moex}/{security}/candles.csv?from={date}&till={date}&interval={interval}&start={start}");
+    loop {
+        let url = format!(
+            "{iss_moex}/{security}/candles.csv?from={date}\
+                &till={date}&interval={interval}&start={start}"
+        );
         let file_name = &format!("{date}_{i}.csv");
-        added = download(&url, security, file_name).await?;
-        start += 100 * i;
+        let added = download(&url, security, file_name).await?;
+        if added < 0 {
+            break;
+        }
+        start += added as u32;
         i += 1;
+        println!("{file_name} done");
         sleep(Duration::from_secs(2));
     }
 
