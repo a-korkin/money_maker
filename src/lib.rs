@@ -37,28 +37,36 @@ pub struct Candle {
     pub end: NaiveDateTime,
 }
 
-pub async fn download(url: &str) -> std::io::Result<()> {
-    let res = reqwest::get(url)
+pub async fn download(url: &str, security: &str) -> std::io::Result<usize> {
+    let response = reqwest::get(url)
         .await
         .expect("failed to download file")
         .text()
         .await
-        .expect("failed to get csv")
+        .expect("failed to get body")
         .split("\n")
         .skip(2)
-        .collect::<Vec<&str>>()
-        .join("\n");
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect::<Vec<String>>();
+
+    let count: usize = response.len();
+    if count <= 1 {
+        return Ok(count);
+    }
 
     let path = &dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
-    if !fs::exists(path)? {
-        fs::create_dir_all(path)?;
-    }
-    let file_name = "moex.csv";
-    let file_path = Path::new(path).join(file_name);
-    let mut file = fs::File::create(file_path)?;
-    file.write_all(res.as_bytes())?;
+    let path = Path::new(path).join(security);
 
-    Ok(())
+    if !fs::exists(&path)? {
+        fs::create_dir_all(&path)?;
+    }
+    let file_name = "moex2.csv";
+    let file_path = Path::new(&path.to_str().unwrap()).join(file_name);
+    let mut file = fs::File::create(file_path)?;
+    file.write_all(response.join("\n").as_bytes())?;
+
+    Ok(count)
 }
 
 pub async fn read_csv(path: &str) -> Vec<Candle> {
