@@ -37,7 +37,7 @@ pub struct Candle {
     pub end: NaiveDateTime,
 }
 
-pub async fn download(url: &str, security: &str) -> std::io::Result<usize> {
+pub async fn download(url: &str, security: &str, file_name: &str) -> std::io::Result<i64> {
     let response = reqwest::get(url)
         .await
         .expect("failed to download file")
@@ -50,9 +50,9 @@ pub async fn download(url: &str, security: &str) -> std::io::Result<usize> {
         .map(|s| s.to_string())
         .collect::<Vec<String>>();
 
-    let count: usize = response.len();
+    let count = response.len();
     if count <= 1 {
-        return Ok(count);
+        return Ok(-1i64);
     }
 
     let path = &dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
@@ -61,12 +61,11 @@ pub async fn download(url: &str, security: &str) -> std::io::Result<usize> {
     if !fs::exists(&path)? {
         fs::create_dir_all(&path)?;
     }
-    let file_name = "moex2.csv";
     let file_path = Path::new(&path.to_str().unwrap()).join(file_name);
     let mut file = fs::File::create(file_path)?;
     file.write_all(response.join("\n").as_bytes())?;
 
-    Ok(count)
+    Ok(count as i64)
 }
 
 pub async fn read_csv(path: &str) -> Vec<Candle> {
