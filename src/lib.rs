@@ -1,3 +1,4 @@
+use chrono::prelude::*;
 use chrono::{Duration, NaiveDateTime};
 use csv;
 use dotenv;
@@ -7,6 +8,8 @@ use serde::Deserialize;
 use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
+use std::thread;
+use std::time;
 
 pub mod unix_timestamp {
     use chrono::NaiveDateTime;
@@ -35,6 +38,46 @@ pub struct Candle {
     pub begin: NaiveDateTime,
     #[serde(with = "unix_timestamp")]
     pub end: NaiveDateTime,
+}
+
+pub async fn run(securities: Vec<&str>, date: DateTime<Utc>) -> std::io::Result<()> {
+    dotenv::dotenv().ok();
+    let date = date.format("%Y-%m-%d");
+    let interval: u8 = 1;
+    let iss_moex = dotenv::var("ISS_MOEX").expect("failed to read ISS_MOEX");
+
+    for security in securities {
+        let mut start: u32 = 0;
+        let mut i = 1;
+        loop {
+            let url = format!(
+                "{iss_moex}/{security}/candles.csv?from={date}\
+                &till={date}&interval={interval}&start={start}"
+            );
+            let file_name = &format!("{date}_{i}.csv");
+            let added = download(&url, security, file_name).await?;
+            if added < 0 {
+                break;
+            }
+            start += added as u32;
+            i += 1;
+            println!("{security}: {file_name} done");
+            thread::sleep(time::Duration::from_secs(1));
+        }
+    }
+
+    // let data_dir = dotenv::var("DATA_DIR").expect("failed to read DATA_DIR");
+    // let candles = read_csv(
+    //     Path::new(&data_dir)
+    //         .join(security)
+    //         .join("moex2.csv")
+    //         .to_str()
+    //         .unwrap(),
+    // )
+    // .await;
+    // draw_candles(candles).await;
+
+    Ok(())
 }
 
 pub async fn download(url: &str, security: &str, file_name: &str) -> std::io::Result<i64> {
