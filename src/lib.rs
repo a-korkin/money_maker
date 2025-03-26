@@ -1,5 +1,6 @@
 use chrono::{Duration, NaiveDateTime};
 use csv;
+use dotenv;
 use plotters::prelude::*;
 use reqwest;
 use serde::Deserialize;
@@ -24,12 +25,12 @@ pub mod unix_timestamp {
 
 #[derive(Debug, Deserialize)]
 pub struct Candle {
-    pub open: f64,
-    pub close: f64,
-    pub high: f64,
-    pub low: f64,
-    pub value: f64,
-    pub volume: f64,
+    pub open: f32,
+    pub close: f32,
+    pub high: f32,
+    pub low: f32,
+    pub value: f32,
+    pub volume: f32,
     #[serde(with = "unix_timestamp")]
     pub begin: NaiveDateTime,
     #[serde(with = "unix_timestamp")]
@@ -42,9 +43,13 @@ pub async fn download(url: &str) -> std::io::Result<()> {
         .expect("failed to download file")
         .text()
         .await
-        .expect("failed to get csv");
+        .expect("failed to get csv")
+        .split("\n")
+        .skip(2)
+        .collect::<Vec<&str>>()
+        .join("\n");
 
-    let path = "data/iss_moex";
+    let path = &dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
     if !fs::exists(path)? {
         fs::create_dir_all(path)?;
     }
@@ -85,18 +90,15 @@ pub async fn draw_candles(candles: Vec<Candle>) {
         .build_cartesian_2d(RangedDateTime::from(from_date..to_date), 210f32..225f32)
         .unwrap();
 
-    chart
-        .configure_mesh() // .light_line_style(WHITE)
-        .draw()
-        .unwrap();
+    chart.configure_mesh().draw().unwrap();
 
     let candles = candles.iter().map(|x| {
         CandleStick::new(
             x.begin,
-            x.open as f32,
-            x.high as f32,
-            x.low as f32,
-            x.close as f32,
+            x.open,
+            x.high,
+            x.low,
+            x.close,
             GREEN.filled(),
             RED.filled(),
             7,
