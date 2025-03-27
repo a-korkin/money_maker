@@ -15,7 +15,7 @@ mod models;
 use models::common::Candle;
 mod utils;
 
-pub async fn run(securities: Vec<&str>, date: DateTime<Utc>) -> std::io::Result<()> {
+pub async fn run(securities: &Vec<&str>, date: DateTime<Utc>) -> std::io::Result<()> {
     let date = date.format("%Y-%m-%d");
     let interval: u8 = 1;
     let iss_moex = dotenv::var("ISS_MOEX").expect("failed to read ISS_MOEX");
@@ -36,8 +36,8 @@ pub async fn run(securities: Vec<&str>, date: DateTime<Utc>) -> std::io::Result<
                     }
                     start += added as u32;
                     i += 1;
-                    info!("{security}: {file_name} done");
-                    thread::sleep(time::Duration::from_secs(1));
+                    info!("{security} => {file_name}, count => {added}");
+                    thread::sleep(time::Duration::from_millis(500));
                 }
                 Err(e) => {
                     error!("{}", e);
@@ -48,6 +48,16 @@ pub async fn run(securities: Vec<&str>, date: DateTime<Utc>) -> std::io::Result<
     }
 
     Ok(())
+}
+
+pub fn elapsed_time(start: NaiveTime, end: NaiveTime) -> String {
+    let diff = end - start;
+    format!(
+        "{:0>2}:{:0>2}:{:0>2}",
+        diff.num_hours(),
+        diff.num_minutes() % 60,
+        diff.num_seconds() % 60
+    )
 }
 
 pub async fn draw_graphs(security: &str) -> std::io::Result<()> {

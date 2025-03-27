@@ -19,7 +19,7 @@ impl log::Log for SimpleLogger {
                 _ => "37m",
             };
             println!(
-                "\x1b[{color}[{}] {}: {}\x1b[0m",
+                "\x1b[{color}[{}] {} | {}\x1b[0m",
                 time,
                 record.level(),
                 record.args()

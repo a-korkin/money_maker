@@ -1,8 +1,9 @@
 use chrono::prelude::*;
-use money_maker::{draw_graphs, run};
+use money_maker::{elapsed_time, run}; //{draw_graphs, run};
 mod models;
 use models::common::DateRange;
 mod utils;
+use log::info;
 use std::io::Result;
 use tokio;
 use utils::logger;
@@ -15,15 +16,18 @@ async fn main() -> Result<()> {
     // let result = run(securities, date).await;
     // return result;
 
+    let start = Local::now().time();
     let date_range = DateRange(
-        chrono::Utc.with_ymd_and_hms(2025, 2, 1, 0, 0, 0).unwrap(),
-        chrono::Utc.with_ymd_and_hms(2025, 3, 1, 0, 0, 0).unwrap(),
+        chrono::Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+        chrono::Utc.with_ymd_and_hms(2025, 3, 26, 0, 0, 0).unwrap(),
     );
 
+    let securities: Vec<&str> = vec!["LKOH"];
     for date in date_range {
-        println!("{:?}", date);
+        let _ = run(&securities, date).await;
     }
-
+    let end = Local::now().time();
+    info!("elapsed time: {}", elapsed_time(start, end));
     Ok(())
 
     // draw_graphs("MOEX").await
