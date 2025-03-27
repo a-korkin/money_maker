@@ -1,9 +1,11 @@
-use chrono::prelude::*;
-use money_maker::{elapsed_time, run}; //{draw_graphs, run};
+// use chrono::prelude::*;
+use money_maker::{elapsed_time, get_candles_from_csv, run}; //{draw_graphs, run};
 mod models;
-use models::common::DateRange;
+// use models::common::DateRange;
+mod db;
+use db::pg;
 mod utils;
-use log::info;
+// use log::info;
 use std::io::Result;
 use tokio;
 use utils::logger;
@@ -16,19 +18,28 @@ async fn main() -> Result<()> {
     // let result = run(securities, date).await;
     // return result;
 
-    let start = Local::now().time();
-    let date_range = DateRange(
-        chrono::Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-        chrono::Utc.with_ymd_and_hms(2025, 3, 26, 0, 0, 0).unwrap(),
-    );
-
-    let securities: Vec<&str> = vec!["LKOH"];
-    for date in date_range {
-        let _ = run(&securities, date).await;
-    }
-    let end = Local::now().time();
-    info!("elapsed time: {}", elapsed_time(start, end));
-    Ok(())
+    // let start = Local::now().time();
+    // let date_range = DateRange(
+    //     chrono::Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+    //     chrono::Utc.with_ymd_and_hms(2025, 3, 26, 0, 0, 0).unwrap(),
+    // );
+    //
+    // let securities: Vec<&str> = vec!["LKOH"];
+    // for date in date_range {
+    //     let _ = run(&securities, date).await;
+    // }
+    // let end = Local::now().time();
+    // info!("elapsed time: {}", elapsed_time(start, end));
+    // Ok(())
 
     // draw_graphs("MOEX").await
+
+    let pool = pg::init_db().await;
+    // let secs = vec!["MOEX", "LKOH"];
+    // pg::add_securities(&pool, &secs).await;
+
+    // let candles = get_candles_from_csv("data/iss_moex/MOEX/2025-03-03_1.csv").await;
+    pg::add_candles(&pool).await;
+
+    Ok(())
 }

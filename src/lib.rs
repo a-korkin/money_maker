@@ -73,7 +73,8 @@ pub async fn draw_graphs(security: &str) -> std::io::Result<()> {
         let file_type = file.file_type().unwrap();
 
         if file_type.is_file() {
-            let candles = read_csv(file.path().to_str().expect("failed to get filepath")).await;
+            let candles =
+                get_candles_from_csv(file.path().to_str().expect("failed to get filepath")).await;
             draw_candles(candles, security, file.file_name().to_str().unwrap()).await;
         }
     }
@@ -115,7 +116,7 @@ pub async fn download(url: &str, security: &str, file_name: &str) -> std::io::Re
     Ok((count - 1) as i64)
 }
 
-pub async fn read_csv(path: &str) -> Vec<Candle> {
+pub async fn get_candles_from_csv(path: &str) -> Vec<Candle> {
     let mut rdr = csv::ReaderBuilder::new()
         .delimiter(b';')
         .from_path(path)

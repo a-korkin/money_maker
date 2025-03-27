@@ -32,6 +32,38 @@ pub struct Candle {
     pub end: NaiveDateTime,
 }
 
+// impl Into<String> for Candle {
+//     fn into(self) -> String {
+//         format!(
+//             "{}, {}, {}, {}, {}, {}, '{}', '{}'",
+//             self.open,
+//             self.close,
+//             self.high,
+//             self.low,
+//             self.value,
+//             self.volume,
+//             self.begin,
+//             self.end
+//         )
+//     }
+// }
+
+impl ToString for Candle {
+    fn to_string(&self) -> String {
+        format!(
+            "{}, {}, {}, {}, {}, {}, '{}', '{}'",
+            self.open,
+            self.close,
+            self.high,
+            self.low,
+            self.value,
+            self.volume,
+            self.begin,
+            self.end
+        )
+    }
+}
+
 pub struct DateRange(pub DateTime<Utc>, pub DateTime<Utc>);
 
 impl Iterator for DateRange {
