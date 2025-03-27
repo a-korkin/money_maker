@@ -957,6 +957,7 @@ dependencies = [
  "chrono",
  "csv",
  "dotenv",
+ "log",
  "plotters",
  "reqwest",
  "serde",

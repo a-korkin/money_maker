@@ -2,6 +2,7 @@ use chrono::prelude::*;
 use chrono::Duration;
 use csv;
 use dotenv;
+use log::{error, info};
 use plotters::prelude::*;
 use reqwest;
 use std::fs;
@@ -12,9 +13,9 @@ use std::time;
 
 mod models;
 use models::common::Candle;
+mod utils;
 
 pub async fn run(securities: Vec<&str>, date: DateTime<Utc>) -> std::io::Result<()> {
-    dotenv::dotenv().ok();
     let date = date.format("%Y-%m-%d");
     let interval: u8 = 1;
     let iss_moex = dotenv::var("ISS_MOEX").expect("failed to read ISS_MOEX");
@@ -28,14 +29,21 @@ pub async fn run(securities: Vec<&str>, date: DateTime<Utc>) -> std::io::Result<
                 &till={date}&interval={interval}&start={start}"
             );
             let file_name = &format!("{date}_{i}.csv");
-            let added = download(&url, security, file_name).await?;
-            if added < 0 {
-                break;
+            match download(&url, security, file_name).await {
+                Ok(added) => {
+                    if added < 0 {
+                        break;
+                    }
+                    start += added as u32;
+                    i += 1;
+                    info!("{security}: {file_name} done");
+                    thread::sleep(time::Duration::from_secs(1));
+                }
+                Err(e) => {
+                    error!("{}", e);
+                    break;
+                }
             }
-            start += added as u32;
-            i += 1;
-            println!("{security}: {file_name} done");
-            thread::sleep(time::Duration::from_secs(1));
         }
     }
 
@@ -54,9 +62,12 @@ pub async fn run(securities: Vec<&str>, date: DateTime<Utc>) -> std::io::Result<
 }
 
 pub async fn download(url: &str, security: &str, file_name: &str) -> std::io::Result<i64> {
-    let response = reqwest::get(url)
-        .await
-        .expect("failed to download file")
+    let response = reqwest::get(url).await.expect("failed to send request");
+    if response.status() != 200 {
+        error!("response status: {}", response.status());
+        return Ok(-1);
+    }
+    let rows = response
         .text()
         .await
         .expect("failed to get body")
@@ -66,7 +77,7 @@ pub async fn download(url: &str, security: &str, file_name: &str) -> std::io::Re
         .map(|s| s.to_string())
         .collect::<Vec<String>>();
 
-    let count = response.len();
+    let count = rows.len();
     if count <= 1 {
         return Ok(-1i64);
     }
@@ -79,7 +90,7 @@ pub async fn download(url: &str, security: &str, file_name: &str) -> std::io::Re
     }
     let file_path = Path::new(&path.to_str().unwrap()).join(file_name);
     let mut file = fs::File::create(file_path)?;
-    file.write_all(response.join("\n").as_bytes())?;
+    file.write_all(rows.join("\n").as_bytes())?;
 
     Ok((count - 1) as i64)
 }
