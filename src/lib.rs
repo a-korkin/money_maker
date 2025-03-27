@@ -47,16 +47,26 @@ pub async fn run(securities: Vec<&str>, date: DateTime<Utc>) -> std::io::Result<
         }
     }
 
-    // let data_dir = dotenv::var("DATA_DIR").expect("failed to read DATA_DIR");
-    // let candles = read_csv(
-    //     Path::new(&data_dir)
-    //         .join(security)
-    //         .join("moex2.csv")
-    //         .to_str()
-    //         .unwrap(),
-    // )
-    // .await;
-    // draw_candles(candles).await;
+    Ok(())
+}
+
+pub async fn draw_graphs(security: &str) -> std::io::Result<()> {
+    let data_dir = dotenv::var("DATA_DIR").expect("failed to read DATA_DIR");
+
+    let path = Path::new(&data_dir)
+        .join(security)
+        .to_str()
+        .unwrap()
+        .to_owned();
+    for entry in fs::read_dir(path).unwrap() {
+        let file = entry.unwrap();
+        let file_type = file.file_type().unwrap();
+
+        if file_type.is_file() {
+            let candles = read_csv(file.path().to_str().expect("failed to get filepath")).await;
+            draw_candles(candles, security, file.file_name().to_str().unwrap()).await;
+        }
+    }
 
     Ok(())
 }
@@ -106,12 +116,15 @@ pub async fn read_csv(path: &str) -> Vec<Candle> {
         .collect::<Vec<_>>()
 }
 
-pub async fn draw_candles(candles: Vec<Candle>) {
-    let dir = "graphs";
-    if !fs::exists(dir).unwrap() {
-        fs::create_dir_all(dir).unwrap();
+pub async fn draw_candles(candles: Vec<Candle>, security: &str, file_name: &str) {
+    let path = dotenv::var("GRAPHS_DIR").expect("failed to read GRAPHS_DIR");
+    let dir = Path::new(&path).join(security);
+    if !fs::exists(&dir).unwrap() {
+        fs::create_dir_all(&dir).unwrap();
     }
-    let root = BitMapBackend::new("graphs/stock.png", (1024, 768)).into_drawing_area();
+    let file_name = file_name.replace(".csv", ".png");
+    let file = Path::new(&dir).join(file_name);
+    let root = BitMapBackend::new(&file, (1024, 768)).into_drawing_area();
     root.fill(&WHITE).unwrap();
 
     let to_date = candles.last().unwrap().end + Duration::minutes(10);
@@ -120,7 +133,7 @@ pub async fn draw_candles(candles: Vec<Candle>) {
     let mut chart = ChartBuilder::on(&root)
         .x_label_area_size(40)
         .y_label_area_size(40)
-        .caption("MSFT", ("sans-serif", 50.0).into_font())
+        .caption(security, ("sans-serif", 50.0).into_font())
         .build_cartesian_2d(RangedDateTime::from(from_date..to_date), 210f32..225f32)
         .unwrap();
 
