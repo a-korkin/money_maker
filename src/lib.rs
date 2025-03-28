@@ -1,22 +1,81 @@
+mod db;
+mod models;
+mod utils;
+
 use chrono::prelude::*;
 use chrono::Duration;
+use clap::Parser;
 use csv;
+use db::pg;
+use db::pg::add_candles;
 use dotenv;
 use log::{error, info};
+use models::common::{Candle, DateRange};
 use plotters::prelude::*;
 use reqwest;
+use sqlx::postgres::PgPool;
 use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
 use std::thread;
 use std::time;
+use utils::logger;
 
-mod models;
-use models::common::{Candle, DateRange};
-mod db;
-mod utils;
-use db::pg::add_candles;
-use sqlx::postgres::PgPool;
+/// Money maker app
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// List of securities separated by comma
+    #[arg(short, long)]
+    secs: String,
+
+    /// Download csv files
+    #[arg(short, long)]
+    download: bool,
+
+    // Adding to DB
+    #[arg(short, long)]
+    add: bool,
+}
+
+pub async fn run() {
+    logger::init().expect("failed to init logging");
+
+    let args = Args::parse();
+
+    let securities = args
+        .secs
+        .split(",")
+        .map(|s| s.trim().to_uppercase().to_owned())
+        .collect::<Vec<String>>();
+
+    let start: DateTime<Utc> = dotenv::var("PERIOD_START")
+        .expect("failed to get PERIOD_START")
+        .parse::<NaiveDate>()
+        .expect("failed parse to DateTime")
+        .and_time(NaiveTime::default())
+        .and_local_timezone(Utc)
+        .unwrap();
+
+    let end: DateTime<Utc> = dotenv::var("PERIOD_END")
+        .expect("failed to get PERIOD_END")
+        .parse::<NaiveDate>()
+        .expect("failed parse to DateTime")
+        .and_time(NaiveTime::default())
+        .and_local_timezone(Utc)
+        .unwrap();
+
+    if args.download {
+        fetch_data(&securities, start, end).await;
+    }
+
+    if args.add {
+        let pool = pg::init_db().await;
+        pg::add_securities(&pool, &securities).await;
+
+        insert_candles(&pool, &securities).await;
+    }
+}
 
 pub async fn fetch_data(securities: &Vec<String>, start: DateTime<Utc>, end: DateTime<Utc>) {
     let begin = Local::now().time();
@@ -112,24 +171,27 @@ pub async fn get_candles_from_csv(path: &str) -> Vec<Candle> {
         .collect::<Vec<_>>()
 }
 
-pub async fn insert_candles(pool: &PgPool, security: &str) {
+pub async fn insert_candles(pool: &PgPool, securities: &Vec<String>) {
     let start = Local::now().time();
-    let data_dir = dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
-    let path = Path::new(&data_dir)
-        .join(security)
-        .to_str()
-        .unwrap()
-        .to_owned();
-    for entry in fs::read_dir(path).unwrap() {
-        let file = entry.unwrap();
-        let file_type = file.file_type().unwrap();
+    for security in securities {
+        let data_dir = dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
+        let path = Path::new(&data_dir)
+            .join(security)
+            .to_str()
+            .unwrap()
+            .to_owned();
+        for entry in fs::read_dir(path).unwrap() {
+            let file = entry.unwrap();
+            let file_type = file.file_type().unwrap();
 
-        if file_type.is_file() {
-            let candles =
-                get_candles_from_csv(file.path().to_str().expect("failed to get filepath")).await;
-            let added = add_candles(pool, security, &candles).await;
-            let file_name = file.file_name().to_str().unwrap().to_owned();
-            info!("{security} => {file_name}, count => {added}");
+            if file_type.is_file() {
+                let candles =
+                    get_candles_from_csv(file.path().to_str().expect("failed to get filepath"))
+                        .await;
+                let added = add_candles(pool, security, &candles).await;
+                let file_name = file.file_name().to_str().unwrap().to_owned();
+                info!("{security} => {file_name}, count => {added}");
+            }
         }
     }
     let end = Local::now().time();

@@ -1,71 +1,9 @@
-use chrono::prelude::*;
-use money_maker::{fetch_data, insert_candles};
-mod db;
-mod models;
-use db::pg;
-mod utils;
-use clap::Parser;
+use money_maker::run;
 use std::io::Result;
 use tokio;
-use utils::logger;
-
-/// Money maker app
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    /// List of securities separated by comma
-    #[arg(short, long)]
-    secs: String,
-
-    /// Download csv files
-    #[arg(short, long)]
-    download: bool,
-
-    // Adding to DB
-    #[arg(short, long)]
-    add: bool,
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    logger::init().expect("failed to init logging");
-
-    let args = Args::parse();
-
-    let securities = args
-        .secs
-        .split(",")
-        .map(|s| s.trim().to_uppercase().to_owned())
-        .collect::<Vec<String>>();
-
-    let start: DateTime<Utc> = dotenv::var("PERIOD_START")
-        .expect("failed to get PERIOD_START")
-        .parse::<NaiveDate>()
-        .expect("failed parse to DateTime")
-        .and_time(NaiveTime::default())
-        .and_local_timezone(Utc)
-        .unwrap();
-
-    let end: DateTime<Utc> = dotenv::var("PERIOD_END")
-        .expect("failed to get PERIOD_END")
-        .parse::<NaiveDate>()
-        .expect("failed parse to DateTime")
-        .and_time(NaiveTime::default())
-        .and_local_timezone(Utc)
-        .unwrap();
-
-    if args.download {
-        fetch_data(&securities, start, end).await;
-    }
-
-    if args.add {
-        let pool = pg::init_db().await;
-        pg::add_securities(&pool, &securities).await;
-
-        for security in securities {
-            insert_candles(&pool, &security).await;
-        }
-    }
-
+    run().await;
     Ok(())
 }
