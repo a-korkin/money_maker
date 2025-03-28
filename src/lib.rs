@@ -12,49 +12,49 @@ use std::thread;
 use std::time;
 
 mod models;
-use models::common::Candle;
+use models::common::{Candle, DateRange};
 mod db;
 mod utils;
 use db::pg::add_candles;
 use sqlx::postgres::PgPool;
 
-pub async fn run(securities: &Vec<String>, date: DateTime<Utc>) -> std::io::Result<()> {
+pub async fn fetch_data(securities: &Vec<String>, start: DateTime<Utc>, end: DateTime<Utc>) {
     let begin = Local::now().time();
-    let date = date.format("%Y-%m-%d");
-    let interval: u8 = 1;
-    let iss_moex = dotenv::var("ISS_MOEX").expect("failed to read ISS_MOEX");
+    let date_range = DateRange(start, end);
+    for date in date_range {
+        let date = date.format("%Y-%m-%d");
+        let interval: u8 = 1;
+        let iss_moex = dotenv::var("ISS_MOEX").expect("failed to read ISS_MOEX");
 
-    for security in securities {
-        let mut start: u32 = 0;
-        let mut i = 1;
-        loop {
-            let url = format!(
-                "{iss_moex}/{security}/candles.csv?from={date}\
+        for security in securities {
+            let mut start: u32 = 0;
+            let mut i = 1;
+            loop {
+                let url = format!(
+                    "{iss_moex}/{security}/candles.csv?from={date}\
                 &till={date}&interval={interval}&start={start}"
-            );
-            let file_name = &format!("{date}_{i}.csv");
-            match download(&url, security, file_name).await {
-                Ok(added) => {
-                    if added < 0 {
+                );
+                let file_name = &format!("{date}_{i}.csv");
+                match download(&url, security, file_name).await {
+                    Ok(added) => {
+                        if added < 0 {
+                            break;
+                        }
+                        start += added as u32;
+                        i += 1;
+                        info!("{security} => {file_name}, count => {added}");
+                        thread::sleep(time::Duration::from_millis(500));
+                    }
+                    Err(e) => {
+                        error!("{}", e);
                         break;
                     }
-                    start += added as u32;
-                    i += 1;
-                    info!("{security} => {file_name}, count => {added}");
-                    thread::sleep(time::Duration::from_millis(500));
-                }
-                Err(e) => {
-                    error!("{}", e);
-                    break;
                 }
             }
         }
     }
-
     let end = Local::now().time();
     info!("elapsed time: {}", elapsed_time(begin, end));
-
-    Ok(())
 }
 
 pub fn elapsed_time(start: NaiveTime, end: NaiveTime) -> String {

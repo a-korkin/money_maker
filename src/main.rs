@@ -1,13 +1,10 @@
 use chrono::prelude::*;
-use money_maker::{insert_candles, run};
-mod models;
-// use models::common::DateRange;
+use money_maker::{fetch_data, insert_candles};
 mod db;
+mod models;
 use db::pg;
 mod utils;
-// use log::info;
 use clap::Parser;
-use models::common::DateRange;
 use std::io::Result;
 use tokio;
 use utils::logger;
@@ -57,12 +54,8 @@ async fn main() -> Result<()> {
         .and_local_timezone(Utc)
         .unwrap();
 
-    let date_range = DateRange(start, end);
-
     if args.download {
-        for date in date_range {
-            let _ = run(&securities, date).await;
-        }
+        fetch_data(&securities, start, end).await;
     }
 
     if args.add {
