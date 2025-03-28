@@ -1,5 +1,5 @@
+use crate::models::common::{Candle, ToSql};
 use dotenv;
-use money_maker::get_candles_from_csv;
 use sqlx::postgres::PgPool;
 
 pub async fn init_db() -> PgPool {
@@ -24,20 +24,26 @@ pub async fn add_securities(pool: &PgPool, securities: &Vec<&str>) {
         .expect("failed to insert securities");
 }
 
-pub async fn add_candles(pool: &PgPool) {
-    let candles = get_candles_from_csv("data/iss_moex/MOEX/2025-03-03_1.csv").await;
-    let security = "1592a4c0-e9cf-4c14-b985-460b958df3df";
-    let cans = candles
+pub async fn add_candles(pool: &PgPool, security: &str, candles: &Vec<Candle>) {
+    let row: (String,) = sqlx::query_as("select id::text from public.securities where code = $1")
+        .bind(security)
+        .fetch_one(pool)
+        .await
+        .expect("failed to get security id");
+
+    let candles_str = candles
         .iter()
-        .map(|c| format!("('{}', {})", security, c.to_string()))
+        .map(|c| format!("('{}'::uuid, {})", row.0, c.for_insert()))
         .collect::<Vec<String>>()
         .join(",\n");
     let sql = format!(
         r#"
     insert into public.candles(security_id, open, close, high, low, value, volume, begin_t, end_t)
-    values{}"#,
-        cans
+    values{}
+        "#,
+        candles_str
     );
+
     let _ = sqlx::query(&sql)
         .execute(pool)
         .await

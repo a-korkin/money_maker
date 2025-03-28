@@ -1,5 +1,5 @@
 // use chrono::prelude::*;
-use money_maker::{elapsed_time, get_candles_from_csv, run}; //{draw_graphs, run};
+use money_maker::insert_candles; //{draw_graphs, run};
 mod models;
 // use models::common::DateRange;
 mod db;
@@ -38,8 +38,6 @@ async fn main() -> Result<()> {
     // let secs = vec!["MOEX", "LKOH"];
     // pg::add_securities(&pool, &secs).await;
 
-    // let candles = get_candles_from_csv("data/iss_moex/MOEX/2025-03-03_1.csv").await;
-    pg::add_candles(&pool).await;
-
+    insert_candles(&pool, "MOEX").await;
     Ok(())
 }

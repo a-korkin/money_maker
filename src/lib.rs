@@ -13,7 +13,10 @@ use std::time;
 
 mod models;
 use models::common::Candle;
+mod db;
 mod utils;
+use db::pg::add_candles;
+use sqlx::postgres::PgPool;
 
 pub async fn run(securities: &Vec<&str>, date: DateTime<Utc>) -> std::io::Result<()> {
     let date = date.format("%Y-%m-%d");
@@ -125,6 +128,11 @@ pub async fn get_candles_from_csv(path: &str) -> Vec<Candle> {
     rdr.deserialize::<Candle>()
         .map(|c| c.unwrap())
         .collect::<Vec<_>>()
+}
+
+pub async fn insert_candles(pool: &PgPool, security: &str) {
+    let candles = get_candles_from_csv("data/iss_moex/MOEX/2025-03-03_1.csv").await;
+    add_candles(pool, security, &candles).await;
 }
 
 pub async fn draw_candles(candles: Vec<Candle>, security: &str, file_name: &str) {

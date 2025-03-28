@@ -32,8 +32,12 @@ pub struct Candle {
     pub end: NaiveDateTime,
 }
 
-// impl Into<String> for Candle {
-//     fn into(self) -> String {
+pub trait ToSql {
+    fn for_insert(&self) -> String;
+}
+
+// impl ToString for Candle {
+//     fn to_string(&self) -> String {
 //         format!(
 //             "{}, {}, {}, {}, {}, {}, '{}', '{}'",
 //             self.open,
@@ -48,8 +52,8 @@ pub struct Candle {
 //     }
 // }
 
-impl ToString for Candle {
-    fn to_string(&self) -> String {
+impl ToSql for Candle {
+    fn for_insert(&self) -> String {
         format!(
             "{}, {}, {}, {}, {}, {}, '{}', '{}'",
             self.open,
