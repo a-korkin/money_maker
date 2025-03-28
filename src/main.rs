@@ -1,43 +1,78 @@
-// use chrono::prelude::*;
-use money_maker::insert_candles; //{draw_graphs, run};
+use chrono::prelude::*;
+use money_maker::{insert_candles, run};
 mod models;
 // use models::common::DateRange;
 mod db;
 use db::pg;
 mod utils;
 // use log::info;
+use clap::Parser;
+use models::common::DateRange;
 use std::io::Result;
 use tokio;
 use utils::logger;
 
+/// Money maker app
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// List of securities separated by comma
+    #[arg(short, long)]
+    secs: String,
+
+    /// Download csv files
+    #[arg(short, long)]
+    download: bool,
+
+    // Adding to DB
+    #[arg(short, long)]
+    add: bool,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     logger::init().expect("failed to init logging");
-    // let securities: Vec<&str> = vec!["MOEX", "LKOH"];
-    // let date = chrono::Utc.with_ymd_and_hms(2025, 3, 3, 0, 0, 0).unwrap();
-    // let result = run(securities, date).await;
-    // return result;
 
-    // let start = Local::now().time();
-    // let date_range = DateRange(
-    //     chrono::Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-    //     chrono::Utc.with_ymd_and_hms(2025, 3, 26, 0, 0, 0).unwrap(),
-    // );
-    //
-    // let securities: Vec<&str> = vec!["LKOH"];
-    // for date in date_range {
-    //     let _ = run(&securities, date).await;
-    // }
-    // let end = Local::now().time();
-    // info!("elapsed time: {}", elapsed_time(start, end));
-    // Ok(())
+    let args = Args::parse();
 
-    // draw_graphs("MOEX").await
+    let securities = args
+        .secs
+        .split(",")
+        .map(|s| s.trim().to_uppercase().to_owned())
+        .collect::<Vec<String>>();
 
-    let pool = pg::init_db().await;
-    // let secs = vec!["MOEX", "LKOH"];
-    // pg::add_securities(&pool, &secs).await;
+    let start: DateTime<Utc> = dotenv::var("PERIOD_START")
+        .expect("failed to get PERIOD_START")
+        .parse::<NaiveDate>()
+        .expect("failed parse to DateTime")
+        .and_time(NaiveTime::default())
+        .and_local_timezone(Utc)
+        .unwrap();
 
-    insert_candles(&pool, "MOEX").await;
+    let end: DateTime<Utc> = dotenv::var("PERIOD_END")
+        .expect("failed to get PERIOD_END")
+        .parse::<NaiveDate>()
+        .expect("failed parse to DateTime")
+        .and_time(NaiveTime::default())
+        .and_local_timezone(Utc)
+        .unwrap();
+
+    let date_range = DateRange(start, end);
+
+    if args.download {
+        for date in date_range {
+            let _ = run(&securities, date).await;
+        }
+    }
+
+    if args.add {
+        let pool = pg::init_db().await;
+        pg::add_securities(&pool, &securities).await;
+
+        for security in securities {
+            insert_candles(&pool, &security).await;
+        }
+    }
+
     Ok(())
 }

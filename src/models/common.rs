@@ -36,22 +36,6 @@ pub trait ToSql {
     fn for_insert(&self) -> String;
 }
 
-// impl ToString for Candle {
-//     fn to_string(&self) -> String {
-//         format!(
-//             "{}, {}, {}, {}, {}, {}, '{}', '{}'",
-//             self.open,
-//             self.close,
-//             self.high,
-//             self.low,
-//             self.value,
-//             self.volume,
-//             self.begin,
-//             self.end
-//         )
-//     }
-// }
-
 impl ToSql for Candle {
     fn for_insert(&self) -> String {
         format!(

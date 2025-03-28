@@ -18,7 +18,8 @@ mod utils;
 use db::pg::add_candles;
 use sqlx::postgres::PgPool;
 
-pub async fn run(securities: &Vec<&str>, date: DateTime<Utc>) -> std::io::Result<()> {
+pub async fn run(securities: &Vec<String>, date: DateTime<Utc>) -> std::io::Result<()> {
+    let begin = Local::now().time();
     let date = date.format("%Y-%m-%d");
     let interval: u8 = 1;
     let iss_moex = dotenv::var("ISS_MOEX").expect("failed to read ISS_MOEX");
@@ -50,6 +51,9 @@ pub async fn run(securities: &Vec<&str>, date: DateTime<Utc>) -> std::io::Result
         }
     }
 
+    let end = Local::now().time();
+    info!("elapsed time: {}", elapsed_time(begin, end));
+
     Ok(())
 }
 
@@ -61,28 +65,6 @@ pub fn elapsed_time(start: NaiveTime, end: NaiveTime) -> String {
         diff.num_minutes() % 60,
         diff.num_seconds() % 60
     )
-}
-
-pub async fn draw_graphs(security: &str) -> std::io::Result<()> {
-    let data_dir = dotenv::var("DATA_DIR").expect("failed to read DATA_DIR");
-
-    let path = Path::new(&data_dir)
-        .join(security)
-        .to_str()
-        .unwrap()
-        .to_owned();
-    for entry in fs::read_dir(path).unwrap() {
-        let file = entry.unwrap();
-        let file_type = file.file_type().unwrap();
-
-        if file_type.is_file() {
-            let candles =
-                get_candles_from_csv(file.path().to_str().expect("failed to get filepath")).await;
-            draw_candles(candles, security, file.file_name().to_str().unwrap()).await;
-        }
-    }
-
-    Ok(())
 }
 
 pub async fn download(url: &str, security: &str, file_name: &str) -> std::io::Result<i64> {
@@ -131,8 +113,27 @@ pub async fn get_candles_from_csv(path: &str) -> Vec<Candle> {
 }
 
 pub async fn insert_candles(pool: &PgPool, security: &str) {
-    let candles = get_candles_from_csv("data/iss_moex/MOEX/2025-03-03_1.csv").await;
-    add_candles(pool, security, &candles).await;
+    let start = Local::now().time();
+    let data_dir = dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
+    let path = Path::new(&data_dir)
+        .join(security)
+        .to_str()
+        .unwrap()
+        .to_owned();
+    for entry in fs::read_dir(path).unwrap() {
+        let file = entry.unwrap();
+        let file_type = file.file_type().unwrap();
+
+        if file_type.is_file() {
+            let candles =
+                get_candles_from_csv(file.path().to_str().expect("failed to get filepath")).await;
+            let added = add_candles(pool, security, &candles).await;
+            let file_name = file.file_name().to_str().unwrap().to_owned();
+            info!("{security} => {file_name}, count => {added}");
+        }
+    }
+    let end = Local::now().time();
+    info!("elapsed time: {}", elapsed_time(start, end));
 }
 
 pub async fn draw_candles(candles: Vec<Candle>, security: &str, file_name: &str) {
@@ -173,4 +174,26 @@ pub async fn draw_candles(candles: Vec<Candle>, security: &str, file_name: &str)
 
     chart.draw_series(candles).unwrap();
     root.present().unwrap();
+}
+
+pub async fn draw_graphs(security: &str) -> std::io::Result<()> {
+    let data_dir = dotenv::var("DATA_DIR").expect("failed to read DATA_DIR");
+
+    let path = Path::new(&data_dir)
+        .join(security)
+        .to_str()
+        .unwrap()
+        .to_owned();
+    for entry in fs::read_dir(path).unwrap() {
+        let file = entry.unwrap();
+        let file_type = file.file_type().unwrap();
+
+        if file_type.is_file() {
+            let candles =
+                get_candles_from_csv(file.path().to_str().expect("failed to get filepath")).await;
+            draw_candles(candles, security, file.file_name().to_str().unwrap()).await;
+        }
+    }
+
+    Ok(())
 }

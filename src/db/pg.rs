@@ -2,6 +2,7 @@ use crate::models::common::{Candle, ToSql};
 use dotenv;
 use sqlx::postgres::PgPool;
 
+#[allow(dead_code)]
 pub async fn init_db() -> PgPool {
     let db_url = dotenv::var("DATABASE_URL").expect("failed to DATABASE_URL");
     let pool = PgPool::connect(&db_url)
@@ -10,13 +11,19 @@ pub async fn init_db() -> PgPool {
     pool
 }
 
-pub async fn add_securities(pool: &PgPool, securities: &Vec<&str>) {
+#[allow(dead_code)]
+pub async fn add_securities(pool: &PgPool, securities: &Vec<String>) {
     let sql = r#"
     insert into public.securities(code)
-    select code 
-    from unnest($1) as code
-    returning id, code
+    select a.code
+    from 
+    (
+        select unnest($1) as code
+    ) as a
+    left join public.securities as b on a.code = b.code
+    where b.id is null
         "#;
+
     let _ = sqlx::query(sql)
         .bind(securities)
         .fetch_all(pool)
@@ -24,7 +31,8 @@ pub async fn add_securities(pool: &PgPool, securities: &Vec<&str>) {
         .expect("failed to insert securities");
 }
 
-pub async fn add_candles(pool: &PgPool, security: &str, candles: &Vec<Candle>) {
+#[allow(dead_code)]
+pub async fn add_candles(pool: &PgPool, security: &str, candles: &Vec<Candle>) -> u64 {
     let row: (String,) = sqlx::query_as("select id::text from public.securities where code = $1")
         .bind(security)
         .fetch_one(pool)
@@ -44,8 +52,9 @@ pub async fn add_candles(pool: &PgPool, security: &str, candles: &Vec<Candle>) {
         candles_str
     );
 
-    let _ = sqlx::query(&sql)
+    let res = sqlx::query(&sql)
         .execute(pool)
         .await
         .expect("failed to insert candles");
+    res.rows_affected()
 }
