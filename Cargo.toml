@@ -13,5 +13,5 @@ plotters = "0.3.7"
 raylib = "5.5.0"
 reqwest = "0.12.15"
 serde = { version = "1.0.219", features = ["derive"] }
-sqlx = { version = "0.8.3", features = ["postgres", "runtime-tokio"] }
+sqlx = { version = "0.8.3", features = ["bigdecimal", "chrono", "postgres", "runtime-tokio"] }
 tokio = { version = "1.44.1", features = ["full"] }

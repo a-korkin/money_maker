@@ -6,6 +6,6 @@ use tokio;
 async fn main() -> Result<()> {
     // run().await;
 
-    run_terminal();
+    run_terminal().await;
     Ok(())
 }

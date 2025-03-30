@@ -1,5 +1,6 @@
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use serde::Deserialize;
+use sqlx;
 use std::mem;
 
 pub mod unix_timestamp {
@@ -17,7 +18,7 @@ pub mod unix_timestamp {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, sqlx::FromRow)]
 #[allow(dead_code)]
 pub struct Candle {
     pub open: f32,

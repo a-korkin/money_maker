@@ -78,8 +78,9 @@ pub async fn run() {
     }
 }
 
-pub fn run_terminal() {
-    terminal::terminal::run_terminal();
+pub async fn run_terminal() {
+    let pool = pg::init_db().await;
+    terminal::terminal::run_terminal(&pool).await;
 }
 
 pub async fn fetch_data(securities: &Vec<String>, start: DateTime<Utc>, end: DateTime<Utc>) {
