@@ -4,7 +4,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use raylib::prelude::*;
 use sqlx::PgPool;
 
-const H: f32 = 480.0;
+const H: f32 = 240.0; //480.0
 const W: f32 = 896.0;
 const CANDLE_W: f32 = 10.0;
 
@@ -36,15 +36,6 @@ pub async fn run_terminal(pool: &PgPool) {
             max_high = candle.high;
         }
     }
-
-    // println!("{:?},{:?},{:?},{:?}", min_date, max_date, min_low, max_high);
-
-    // let times: Vec<(NaiveDateTime, NaiveDateTime)> =
-    //     candles.iter().map(|m| (m.begin, m.end)).collect();
-    //
-    // for time in times.iter().step_by(10) {
-    //     println!("time: {:?}", time);
-    // }
 
     let min_y = f32::floor(min_low);
     let max_y = f32::ceil(max_high);
@@ -83,10 +74,10 @@ fn draw_axis(
     d: &mut RaylibDrawHandle,
     start_pos: &Vector2,
     end_pos: &Vector2,
-    min_y: f32,
+    _min_y: f32,
     max_y: f32,
     step_y: f32,
-    period: Period,
+    _period: Period,
     candles: &Vec<Candle>,
 ) {
     // y-axis
@@ -152,7 +143,16 @@ fn draw_axis(
         i += 1;
     }
 
-    draw_candle(d, &candles[6], first_indx_pos, start_pos, step_y, max_y);
+    for (i, candle) in candles.iter().enumerate() {
+        draw_candle(
+            d,
+            candle,
+            first_indx_pos + (i as f32 * CANDLE_W),
+            start_pos,
+            step_y,
+            max_y,
+        );
+    }
 }
 
 fn convert_coords(start_pos: Vector2, step_y: f32, max_y: f32, in_value_y: f32) -> f32 {
