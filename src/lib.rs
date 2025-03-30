@@ -1,5 +1,6 @@
 mod db;
 mod models;
+mod terminal;
 mod utils;
 
 use chrono::prelude::*;
@@ -33,7 +34,7 @@ struct Args {
     #[arg(short, long)]
     download: bool,
 
-    // Adding to DB
+    /// Adding to DB
     #[arg(short, long)]
     add: bool,
 }
@@ -75,6 +76,10 @@ pub async fn run() {
 
         insert_candles(&pool, &securities).await;
     }
+}
+
+pub fn run_terminal() {
+    terminal::terminal::run_terminal();
 }
 
 pub async fn fetch_data(securities: &Vec<String>, start: DateTime<Utc>, end: DateTime<Utc>) {
@@ -251,9 +256,18 @@ pub async fn draw_graphs(security: &str) -> std::io::Result<()> {
         let file_type = file.file_type().unwrap();
 
         if file_type.is_file() {
-            let candles =
-                get_candles_from_csv(file.path().to_str().expect("failed to get filepath")).await;
-            draw_candles(candles, security, file.file_name().to_str().unwrap()).await;
+            let file_path = file
+                .path()
+                .to_str()
+                .expect("failed to get filepath")
+                .to_owned();
+            let candles = get_candles_from_csv(&file_path).await;
+            let file_name = file
+                .file_name()
+                .to_str()
+                .expect("failed to get filename")
+                .to_owned();
+            draw_candles(candles, security, &file_name).await;
         }
     }
 
