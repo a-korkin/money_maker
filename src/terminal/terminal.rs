@@ -4,8 +4,8 @@ use chrono::{NaiveDate, NaiveDateTime, Timelike};
 use raylib::prelude::*;
 use sqlx::PgPool;
 
-const H: f32 = 480.0;
-const W: f32 = 896.0;
+const H: f32 = 320.0; //480.0;
+const W: f32 = 1280.0;
 const CANDLE_W: f32 = 12.0;
 const COUNT_Y: f32 = 10.0;
 
@@ -15,7 +15,66 @@ pub async fn run_terminal(pool: &PgPool) {
         .and_hms_opt(0, 0, 0)
         .unwrap();
 
-    let candles = pg::get_candles(pool, "LKOH", date).await;
+    let securities = "LKOH;MOEX";
+    let secs: Vec<&str> = securities.split(";").collect();
+    let mut selected_security = secs[0];
+
+    let (mut candles, mut coords) = fetch_data(pool, selected_security, date).await;
+
+    // ui
+    let mut drop_down_edit_mode = false;
+    let mut drop_down_active: i32 = 0;
+
+    let (mut rl, thread) = raylib::init()
+        .size(W as i32, H as i32)
+        .title("Trading terminal")
+        .build();
+
+    rl.set_target_fps(60);
+    while !rl.window_should_close() {
+        let mut d = rl.begin_drawing(&thread);
+
+        d.clear_background(Color::WHITE);
+
+        d.gui_unlock();
+        if d.gui_dropdown_box(
+            Rectangle::new(25.0, 25.0, 125.0, 30.0),
+            &securities,
+            &mut drop_down_active,
+            drop_down_edit_mode,
+        ) {
+            drop_down_edit_mode = !drop_down_edit_mode;
+            if secs[drop_down_active as usize] != selected_security {
+                selected_security = secs[drop_down_active as usize];
+                (candles, coords) = fetch_data(pool, selected_security, date).await;
+            }
+        }
+
+        draw_axis(&mut d, &coords, Period::Hour);
+        draw_candles(&mut d, &coords, &candles);
+    }
+}
+
+#[allow(dead_code)]
+struct DrawCoords {
+    first_idx: f32,
+    start_pos: Vector2,
+    end_pos: Vector2,
+    step_y: f32,
+    min_y: f32,
+    max_y: f32,
+}
+
+enum Period {
+    Hour,
+}
+
+async fn fetch_data<'a>(
+    pool: &'a PgPool,
+    security: &'a str,
+    date: NaiveDateTime,
+) -> (Vec<Candle>, DrawCoords) {
+    let candles = pg::get_candles(pool, &security, date).await;
 
     let mut min_date: chrono::NaiveDateTime = candles.first().unwrap().begin;
     let mut max_date: NaiveDateTime = date;
@@ -39,7 +98,7 @@ pub async fn run_terminal(pool: &PgPool) {
 
     let min_y = f32::floor(min_low);
     let max_y = f32::ceil(max_high);
-    let plot_pos_start = Vector2::new(100.0, 20.0);
+    let plot_pos_start = Vector2::new(300.0, 20.0);
     let plot_pos_end = Vector2::new(W - 20.0, 240.0 - 20.0);
     let step_y = (plot_pos_end.y - plot_pos_start.y) / (max_y - min_y);
 
@@ -47,47 +106,20 @@ pub async fn run_terminal(pool: &PgPool) {
     let half = f32::ceil(candles.len() as f32 / 2.0);
     let first_indx_pos: f32 = center_y - (half * CANDLE_W);
 
-    let (mut rl, thread) = raylib::init()
-        .size(W as i32, H as i32)
-        .title("Trading terminal")
-        .build();
-
-    let draw_coords = DrawCoords {
+    let coords = DrawCoords {
         first_idx: first_indx_pos,
-        start_pos: &plot_pos_start,
-        end_pos: &plot_pos_end,
+        start_pos: plot_pos_start,
+        end_pos: plot_pos_end,
         step_y,
         min_y,
         max_y,
     };
 
-    rl.set_target_fps(60);
-    while !rl.window_should_close() {
-        let mut d = rl.begin_drawing(&thread);
-
-        d.clear_background(Color::WHITE);
-
-        draw_axis(&mut d, &draw_coords, center_y, Period::Hour);
-
-        draw_candles(&mut d, &draw_coords, &candles);
-    }
+    return (candles, coords);
 }
 
-#[allow(dead_code)]
-struct DrawCoords<'a> {
-    first_idx: f32,
-    start_pos: &'a Vector2,
-    end_pos: &'a Vector2,
-    step_y: f32,
-    min_y: f32,
-    max_y: f32,
-}
-
-enum Period {
-    Hour,
-}
-
-fn draw_axis(d: &mut RaylibDrawHandle, coords: &DrawCoords, center: f32, _period: Period) {
+fn draw_axis(d: &mut RaylibDrawHandle, coords: &DrawCoords, _period: Period) {
+    let center = (coords.end_pos.x - coords.start_pos.x) / 2.0;
     // y-axis
     d.draw_line_v(
         coords.start_pos,
@@ -196,7 +228,7 @@ fn draw_candle(
     d: &mut RaylibDrawHandle,
     candle: &Candle,
     idx_pos: f32,
-    start_pos: &Vector2,
+    start_pos: Vector2,
     step_y: f32,
     max_y: f32,
 ) {
@@ -207,16 +239,16 @@ fn draw_candle(
     } else {
         Color::RED
     };
-    let pos = Vector2::new(idx_pos, convert_coords(*start_pos, step_y, max_y, max));
+    let pos = Vector2::new(idx_pos, convert_coords(start_pos, step_y, max_y, max));
     let size = Vector2::new(CANDLE_W, (max - min) * step_y);
     d.draw_rectangle_v(pos, size, color);
     let high = Vector2::new(
         idx_pos + CANDLE_W / 2.0,
-        convert_coords(*start_pos, step_y, max_y, candle.high),
+        convert_coords(start_pos, step_y, max_y, candle.high),
     );
     let low = Vector2::new(
         idx_pos + CANDLE_W / 2.0,
-        convert_coords(*start_pos, step_y, max_y, candle.low),
+        convert_coords(start_pos, step_y, max_y, candle.low),
     );
     d.draw_line_v(high, low, color);
 }
