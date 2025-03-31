@@ -102,9 +102,9 @@ async fn fetch_data<'a>(
     let plot_pos_end = Vector2::new(W - 20.0, 240.0 - 20.0);
     let step_y = (plot_pos_end.y - plot_pos_start.y) / (max_y - min_y);
 
-    let center_y = (plot_pos_end.x - plot_pos_start.x) / 2.0;
+    let center = ((plot_pos_end.x - plot_pos_start.x) / 2.0) + plot_pos_start.x;
     let half = f32::ceil(candles.len() as f32 / 2.0);
-    let first_indx_pos: f32 = center_y - (half * CANDLE_W);
+    let first_indx_pos: f32 = center - (half * CANDLE_W);
 
     let coords = DrawCoords {
         first_idx: first_indx_pos,
