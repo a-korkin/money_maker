@@ -4,7 +4,7 @@ use chrono::{NaiveDate, NaiveDateTime, Timelike};
 use raylib::prelude::*;
 use sqlx::PgPool;
 
-const H: f32 = 240.0; //480.0
+const H: f32 = 480.0;
 const W: f32 = 896.0;
 const CANDLE_W: f32 = 12.0;
 
@@ -40,7 +40,7 @@ pub async fn run_terminal(pool: &PgPool) {
     let min_y = f32::floor(min_low);
     let max_y = f32::ceil(max_high);
     let plot_pos_start = Vector2::new(40.0, 20.0);
-    let plot_pos_end = Vector2::new(W - 20.0, H - 20.0);
+    let plot_pos_end = Vector2::new(W - 20.0, 240.0 - 20.0);
     let step_y = (plot_pos_end.y - plot_pos_start.y) / (max_y - min_y);
 
     let (mut rl, thread) = raylib::init()
@@ -48,6 +48,7 @@ pub async fn run_terminal(pool: &PgPool) {
         .title("Trading terminal")
         .build();
 
+    rl.set_target_fps(60);
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
 
