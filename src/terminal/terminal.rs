@@ -14,8 +14,8 @@ pub async fn run_terminal(pool: &PgPool) {
         .and_hms_opt(0, 0, 0)
         .unwrap();
 
-    let mut candles = pg::get_candles(pool, "MOEX", date).await;
-    candles.sort_by(|a, b| a.begin.cmp(&b.begin));
+    let candles = pg::get_candles(pool, "MOEX", date).await;
+    // candles.sort_by(|a, b| a.begin.cmp(&b.begin));
 
     let mut min_date: chrono::NaiveDateTime = candles.first().unwrap().begin;
     let mut max_date: NaiveDateTime = date;
