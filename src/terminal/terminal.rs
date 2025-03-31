@@ -1,12 +1,12 @@
 use crate::db::pg;
 use crate::models::common::Candle;
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{NaiveDate, NaiveDateTime, Timelike};
 use raylib::prelude::*;
 use sqlx::PgPool;
 
 const H: f32 = 240.0; //480.0
 const W: f32 = 896.0;
-const CANDLE_W: f32 = 10.0;
+const CANDLE_W: f32 = 12.0;
 
 pub async fn run_terminal(pool: &PgPool) {
     let date = NaiveDate::from_ymd_opt(2025, 3, 25)
@@ -124,7 +124,7 @@ fn draw_axis(
     let mut left = center;
     let mut i = 0;
     while right <= end_pos.x {
-        let scale = if i % 5 == 0 { 5_f32 } else { 3_f32 };
+        let scale = if i % 4 == 0 { 5_f32 } else { 3_f32 };
         d.draw_line_v(
             Vector2::new(right, end_pos.y + scale),
             Vector2::new(right, end_pos.y - scale),
@@ -144,14 +144,24 @@ fn draw_axis(
     }
 
     for (i, candle) in candles.iter().enumerate() {
-        draw_candle(
-            d,
-            candle,
-            first_indx_pos + (i as f32 * CANDLE_W),
-            start_pos,
-            step_y,
-            max_y,
-        );
+        let x = first_indx_pos + (i as f32 * CANDLE_W);
+        draw_candle(d, candle, x, start_pos, step_y, max_y);
+        let hour = candle.begin.hour();
+        let offset = match hour {
+            0..=9 => 15.0,
+            10..=19 => 14.0,
+            _ => 13.0,
+        };
+        if hour % 3 == 0 {
+            d.draw_text_ex(
+                d.get_font_default(),
+                &hour.to_string(),
+                Vector2::new(x + offset, end_pos.y + 8.0),
+                10.0,
+                1.0,
+                Color::BLACK,
+            );
+        }
     }
 }
 
