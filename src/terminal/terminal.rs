@@ -7,6 +7,7 @@ use sqlx::PgPool;
 const H: f32 = 480.0;
 const W: f32 = 896.0;
 const CANDLE_W: f32 = 12.0;
+const COUNT_Y: f32 = 10.0;
 
 pub async fn run_terminal(pool: &PgPool) {
     let date = NaiveDate::from_ymd_opt(2025, 3, 25)
@@ -14,8 +15,7 @@ pub async fn run_terminal(pool: &PgPool) {
         .and_hms_opt(0, 0, 0)
         .unwrap();
 
-    let candles = pg::get_candles(pool, "MOEX", date).await;
-    // candles.sort_by(|a, b| a.begin.cmp(&b.begin));
+    let candles = pg::get_candles(pool, "LKOH", date).await;
 
     let mut min_date: chrono::NaiveDateTime = candles.first().unwrap().begin;
     let mut max_date: NaiveDateTime = date;
@@ -39,7 +39,7 @@ pub async fn run_terminal(pool: &PgPool) {
 
     let min_y = f32::floor(min_low);
     let max_y = f32::ceil(max_high);
-    let plot_pos_start = Vector2::new(40.0, 20.0);
+    let plot_pos_start = Vector2::new(100.0, 20.0);
     let plot_pos_end = Vector2::new(W - 20.0, 240.0 - 20.0);
     let step_y = (plot_pos_end.y - plot_pos_start.y) / (max_y - min_y);
 
@@ -57,6 +57,7 @@ pub async fn run_terminal(pool: &PgPool) {
         start_pos: &plot_pos_start,
         end_pos: &plot_pos_end,
         step_y,
+        min_y,
         max_y,
     };
 
@@ -66,16 +67,7 @@ pub async fn run_terminal(pool: &PgPool) {
 
         d.clear_background(Color::WHITE);
 
-        draw_axis(
-            &mut d,
-            &plot_pos_start,
-            &plot_pos_end,
-            min_y,
-            max_y,
-            step_y,
-            center_y,
-            Period::Hour,
-        );
+        draw_axis(&mut d, &draw_coords, center_y, Period::Hour);
 
         draw_candles(&mut d, &draw_coords, &candles);
     }
@@ -87,6 +79,7 @@ struct DrawCoords<'a> {
     start_pos: &'a Vector2,
     end_pos: &'a Vector2,
     step_y: f32,
+    min_y: f32,
     max_y: f32,
 }
 
@@ -94,66 +87,67 @@ enum Period {
     Hour,
 }
 
-fn draw_axis(
-    d: &mut RaylibDrawHandle,
-    start_pos: &Vector2,
-    end_pos: &Vector2,
-    _min_y: f32,
-    max_y: f32,
-    step_y: f32,
-    center: f32,
-    _period: Period,
-) {
+fn draw_axis(d: &mut RaylibDrawHandle, coords: &DrawCoords, center: f32, _period: Period) {
     // y-axis
     d.draw_line_v(
-        start_pos,
-        Vector2::new(start_pos.x, end_pos.y + 1_f32),
+        coords.start_pos,
+        Vector2::new(coords.start_pos.x, coords.end_pos.y + 1_f32),
         Color::BLACK,
     );
 
-    let mut cur_y = start_pos.y;
-    let mut label_y = max_y;
-    while cur_y <= end_pos.y {
+    let mut cur_y = coords.start_pos.y;
+    let step = (coords.end_pos.y - coords.start_pos.y) / COUNT_Y;
+    let add = (coords.max_y - coords.min_y) / 10.0;
+    let mut label: f32 = coords.max_y;
+    while cur_y <= coords.end_pos.y {
         d.draw_line_v(
-            Vector2::new(start_pos.x, cur_y),
-            Vector2::new(start_pos.x + 5_f32, cur_y),
+            Vector2::new(coords.start_pos.x, cur_y),
+            Vector2::new(coords.start_pos.x + 5_f32, cur_y),
             Color::BLACK,
         );
         d.draw_line_v(
-            Vector2::new(start_pos.x, cur_y),
-            Vector2::new(start_pos.x - 6_f32, cur_y),
+            Vector2::new(coords.start_pos.x, cur_y),
+            Vector2::new(coords.start_pos.x - 6_f32, cur_y),
             Color::BLACK,
         );
-
+        let offset = match label {
+            0.0..1000.0 => 40.0,
+            1000.0..10_000.0 => 45.0,
+            _ => 50.0,
+        };
         d.draw_text_ex(
             d.get_font_default(),
-            &label_y.to_string(),
-            Vector2::new(start_pos.x - 25_f32, cur_y - 5_f32),
+            &format!("{:.2}", label),
+            Vector2::new(coords.start_pos.x - offset, cur_y - 5_f32),
             10.0,
             1.0,
             Color::BLACK,
         );
-        cur_y += step_y;
-        label_y -= 1.0;
+        cur_y += step;
+        label -= add;
     }
 
     // x-axis
-    d.draw_line_v(Vector2::new(start_pos.x, end_pos.y), end_pos, Color::BLACK);
+    d.draw_line_v(
+        Vector2::new(coords.start_pos.x, coords.end_pos.y),
+        coords.end_pos,
+        Color::BLACK,
+    );
 
     let mut right = center;
     let mut left = center;
     let mut i = 0;
-    while right <= end_pos.x {
+    while right <= coords.end_pos.x {
         let scale = if i % 4 == 0 { 5_f32 } else { 3_f32 };
         d.draw_line_v(
-            Vector2::new(right, end_pos.y + scale),
-            Vector2::new(right, end_pos.y - scale),
+            Vector2::new(right, coords.end_pos.y + scale),
+            Vector2::new(right, coords.end_pos.y - scale),
             Color::BLACK,
         );
-        if left >= start_pos.x {
+        if left >= coords.start_pos.x {
             d.draw_line_v(
-                Vector2::new(left, end_pos.y + scale),
-                Vector2::new(left, end_pos.y - scale),
+                Vector2::new(left, coords.end_pos.y + scale),
+                Vector2::new(left, coords.end_pos.y - scale),
                 Color::BLACK,
             );
         }
@@ -206,11 +200,8 @@ fn draw_candle(
     step_y: f32,
     max_y: f32,
 ) {
-    let mut max = f32::max(candle.close, candle.open);
+    let max = f32::max(candle.close, candle.open);
     let min = f32::min(candle.close, candle.open);
-    if max == min {
-        max += 0.1;
-    }
     let color = if candle.close >= candle.open {
         Color::GREEN
     } else {
