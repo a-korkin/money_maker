@@ -43,10 +43,22 @@ pub async fn run_terminal(pool: &PgPool) {
     let plot_pos_end = Vector2::new(W - 20.0, 240.0 - 20.0);
     let step_y = (plot_pos_end.y - plot_pos_start.y) / (max_y - min_y);
 
+    let center_y = (plot_pos_end.x - plot_pos_start.x) / 2.0;
+    let half = f32::ceil(candles.len() as f32 / 2.0);
+    let first_indx_pos: f32 = center_y - (half * CANDLE_W);
+
     let (mut rl, thread) = raylib::init()
         .size(W as i32, H as i32)
         .title("Trading terminal")
         .build();
+
+    let draw_coords = DrawCoords {
+        first_idx: first_indx_pos,
+        start_pos: &plot_pos_start,
+        end_pos: &plot_pos_end,
+        step_y,
+        max_y,
+    };
 
     rl.set_target_fps(60);
     while !rl.window_should_close() {
@@ -61,10 +73,21 @@ pub async fn run_terminal(pool: &PgPool) {
             min_y,
             max_y,
             step_y,
+            center_y,
             Period::Hour,
-            &candles,
         );
+
+        draw_candles(&mut d, &draw_coords, &candles);
     }
+}
+
+#[allow(dead_code)]
+struct DrawCoords<'a> {
+    first_idx: f32,
+    start_pos: &'a Vector2,
+    end_pos: &'a Vector2,
+    step_y: f32,
+    max_y: f32,
 }
 
 enum Period {
@@ -78,8 +101,8 @@ fn draw_axis(
     _min_y: f32,
     max_y: f32,
     step_y: f32,
+    center: f32,
     _period: Period,
-    candles: &Vec<Candle>,
 ) {
     // y-axis
     d.draw_line_v(
@@ -117,10 +140,6 @@ fn draw_axis(
     // x-axis
     d.draw_line_v(Vector2::new(start_pos.x, end_pos.y), end_pos, Color::BLACK);
 
-    let center = (end_pos.x - start_pos.x) / 2.0;
-    let half = f32::ceil(candles.len() as f32 / 2.0);
-    let first_indx_pos: f32 = center - (half * CANDLE_W);
-
     let mut right = center;
     let mut left = center;
     let mut i = 0;
@@ -143,10 +162,23 @@ fn draw_axis(
         left -= CANDLE_W;
         i += 1;
     }
+}
 
+fn convert_coords(start_pos: Vector2, step_y: f32, max_y: f32, in_value_y: f32) -> f32 {
+    (max_y - in_value_y) * step_y + start_pos.y
+}
+
+fn draw_candles(d: &mut RaylibDrawHandle, coords: &DrawCoords, candles: &Vec<Candle>) {
     for (i, candle) in candles.iter().enumerate() {
-        let x = first_indx_pos + (i as f32 * CANDLE_W);
-        draw_candle(d, candle, x, start_pos, step_y, max_y);
+        let x = coords.first_idx + (i as f32 * CANDLE_W);
+        draw_candle(
+            d,
+            candle,
+            x + CANDLE_W,
+            coords.start_pos,
+            coords.step_y,
+            coords.max_y,
+        );
         let hour = candle.begin.hour();
         let offset = match hour {
             0..=9 => 15.0,
@@ -157,17 +189,13 @@ fn draw_axis(
             d.draw_text_ex(
                 d.get_font_default(),
                 &hour.to_string(),
-                Vector2::new(x + offset, end_pos.y + 8.0),
+                Vector2::new(x + offset, coords.end_pos.y + 8.0),
                 10.0,
                 1.0,
                 Color::BLACK,
             );
         }
     }
-}
-
-fn convert_coords(start_pos: Vector2, step_y: f32, max_y: f32, in_value_y: f32) -> f32 {
-    (max_y - in_value_y) * step_y + start_pos.y
 }
 
 fn draw_candle(
@@ -178,9 +206,12 @@ fn draw_candle(
     step_y: f32,
     max_y: f32,
 ) {
-    let max = f32::max(candle.close, candle.open);
+    let mut max = f32::max(candle.close, candle.open);
     let min = f32::min(candle.close, candle.open);
-    let color = if candle.close > candle.open {
+    if max == min {
+        max += 0.1;
+    }
+    let color = if candle.close >= candle.open {
         Color::GREEN
     } else {
         Color::RED
