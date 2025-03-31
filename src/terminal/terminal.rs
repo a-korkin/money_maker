@@ -15,15 +15,15 @@ pub async fn run_terminal(pool: &PgPool) {
         .and_hms_opt(0, 0, 0)
         .unwrap();
 
-    let securities = "LKOH;MOEX";
+    let securities = pg::get_securities_str(pool).await;
     let secs: Vec<&str> = securities.split(";").collect();
     let mut selected_security = secs[0];
 
     let (mut candles, mut coords) = fetch_data(pool, selected_security, date).await;
 
     // ui
-    let mut drop_down_edit_mode = false;
-    let mut drop_down_active: i32 = 0;
+    let mut securities_edit = false;
+    let mut securities_active: i32 = 0;
 
     let (mut rl, thread) = raylib::init()
         .size(W as i32, H as i32)
@@ -40,12 +40,12 @@ pub async fn run_terminal(pool: &PgPool) {
         if d.gui_dropdown_box(
             Rectangle::new(25.0, 25.0, 125.0, 30.0),
             &securities,
-            &mut drop_down_active,
-            drop_down_edit_mode,
+            &mut securities_active,
+            securities_edit,
         ) {
-            drop_down_edit_mode = !drop_down_edit_mode;
-            if secs[drop_down_active as usize] != selected_security {
-                selected_security = secs[drop_down_active as usize];
+            securities_edit = !securities_edit;
+            if secs[securities_active as usize] != selected_security {
+                selected_security = secs[securities_active as usize];
                 (candles, coords) = fetch_data(pool, selected_security, date).await;
             }
         }

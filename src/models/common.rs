@@ -18,6 +18,15 @@ pub mod unix_timestamp {
     }
 }
 
+#[derive(sqlx::FromRow)]
+pub struct SecuritiesStr(pub String);
+
+impl Into<String> for SecuritiesStr {
+    fn into(self) -> String {
+        self.0
+    }
+}
+
 #[derive(Debug, Deserialize, sqlx::FromRow)]
 #[allow(dead_code)]
 pub struct Candle {

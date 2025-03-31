@@ -1,4 +1,4 @@
-use crate::models::common::{Candle, ToSql};
+use crate::models::common::{Candle, SecuritiesStr, ToSql};
 use chrono::NaiveDateTime;
 use dotenv;
 use sqlx::postgres::PgPool;
@@ -58,6 +58,20 @@ pub async fn add_candles(pool: &PgPool, security: &str, candles: &Vec<Candle>) -
         .await
         .expect("failed to insert candles");
     res.rows_affected()
+}
+
+pub async fn get_securities_str(pool: &PgPool) -> String {
+    let result: SecuritiesStr = sqlx::query_as(
+        r#"
+    select string_agg(code, ';')::text
+    from public.securities
+        "#,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+
+    result.0
 }
 
 pub async fn get_candles(pool: &PgPool, security: &str, date: NaiveDateTime) -> Vec<Candle> {
