@@ -9,6 +9,19 @@ const W: f32 = 1280.0;
 const CANDLE_W: f32 = 12.0;
 const COUNT_Y: f32 = 10.0;
 
+#[allow(dead_code)]
+struct DrawCoords {
+    start_pos: Vector2,
+    end_pos: Vector2,
+    step_y: f32,
+    min_y: f32,
+    max_y: f32,
+}
+
+enum Period {
+    Hour,
+}
+
 pub async fn run_terminal(pool: &PgPool) {
     let date = NaiveDate::from_ymd_opt(2025, 3, 25)
         .unwrap()
@@ -55,20 +68,6 @@ pub async fn run_terminal(pool: &PgPool) {
     }
 }
 
-#[allow(dead_code)]
-struct DrawCoords {
-    first_idx: f32,
-    start_pos: Vector2,
-    end_pos: Vector2,
-    step_y: f32,
-    min_y: f32,
-    max_y: f32,
-}
-
-enum Period {
-    Hour,
-}
-
 async fn fetch_data<'a>(
     pool: &'a PgPool,
     security: &'a str,
@@ -102,12 +101,7 @@ async fn fetch_data<'a>(
     let plot_pos_end = Vector2::new(W - 20.0, 240.0 - 20.0);
     let step_y = (plot_pos_end.y - plot_pos_start.y) / (max_y - min_y);
 
-    let center = ((plot_pos_end.x - plot_pos_start.x) / 2.0) + plot_pos_start.x;
-    let half = f32::ceil(candles.len() as f32 / 2.0);
-    let first_indx_pos: f32 = center - (half * CANDLE_W);
-
     let coords = DrawCoords {
-        first_idx: first_indx_pos,
         start_pos: plot_pos_start,
         end_pos: plot_pos_end,
         step_y,
@@ -196,7 +190,7 @@ fn convert_coords(start_pos: Vector2, step_y: f32, max_y: f32, in_value_y: f32) 
 
 fn draw_candles(d: &mut RaylibDrawHandle, coords: &DrawCoords, candles: &Vec<Candle>) {
     for (i, candle) in candles.iter().enumerate() {
-        let x = coords.first_idx + (i as f32 * CANDLE_W);
+        let x = coords.start_pos.x + (i as f32 * CANDLE_W);
         draw_candle(
             d,
             candle,
