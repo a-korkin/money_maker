@@ -22,12 +22,23 @@ enum Period {
     Hour,
 }
 
+trait ToStrFormat {
+    fn to_str_fmt(self) -> String;
+}
+
+impl ToStrFormat for NaiveDateTime {
+    fn to_str_fmt(self) -> String {
+        format!("{}0", self.to_string()[..18].to_string())
+    }
+}
+
 pub async fn run_terminal(pool: &PgPool) {
     let date = NaiveDate::from_ymd_opt(2025, 3, 25)
         .unwrap()
         .and_hms_opt(0, 0, 0)
         .unwrap();
 
+    let end = NaiveDateTime::parse_from_str("2025-07-22 12:31:52", "%Y-%m-%d %H:%M:%S").unwrap();
     let securities = pg::get_securities_str(pool).await;
     let secs: Vec<&str> = securities.split(";").collect();
     let mut selected_security = secs[0];
@@ -37,6 +48,10 @@ pub async fn run_terminal(pool: &PgPool) {
     // ui
     let mut securities_edit = false;
     let mut securities_active: i32 = 0;
+    let mut begin_str: String = date.to_str_fmt();
+    let mut begin_edit = false;
+    let mut end_str: String = end.to_str_fmt();
+    let mut end_edit = false;
 
     let (mut rl, thread) = raylib::init()
         .size(W as i32, H as i32)
@@ -63,6 +78,38 @@ pub async fn run_terminal(pool: &PgPool) {
             }
         }
 
+        d.draw_text_ex(
+            d.get_font_default(),
+            "BEGIN",
+            Vector2::new(25.0, 90.0),
+            10.0,
+            1.0,
+            Color::BLACK,
+        );
+        if d.gui_text_box(
+            Rectangle::new(25.0, 100.0, 125.0, 30.0),
+            &mut begin_str,
+            begin_edit,
+        ) {
+            begin_edit = !begin_edit;
+        }
+
+        d.draw_text_ex(
+            d.get_font_default(),
+            "END",
+            Vector2::new(25.0, 135.0),
+            10.0,
+            1.0,
+            Color::BLACK,
+        );
+        if d.gui_text_box(
+            Rectangle::new(25.0, 145.0, 125.0, 30.0),
+            &mut end_str,
+            end_edit,
+        ) {
+            end_edit = !end_edit;
+        }
+
         draw_axis(&mut d, &coords, Period::Hour);
         draw_candles(&mut d, &coords, &candles);
     }
@@ -73,20 +120,16 @@ async fn fetch_data<'a>(
     security: &'a str,
     date: NaiveDateTime,
 ) -> (Vec<Candle>, DrawCoords) {
-    let candles = pg::get_candles(pool, &security, date).await;
+    let start_pos = Vector2::new(300.0, 20.0);
+    let end_pos = Vector2::new(W - 20.0, 240.0 - 20.0);
 
-    let mut min_date: chrono::NaiveDateTime = candles.first().unwrap().begin;
-    let mut max_date: NaiveDateTime = date;
+    let limit = ((end_pos.x - start_pos.x) / CANDLE_W) as i32;
+
+    let candles = pg::get_candles(pool, &security, date, limit).await;
     let mut min_low: f32 = candles.first().unwrap().low;
     let mut max_high: f32 = 0_f32;
 
     for candle in candles.iter() {
-        if candle.begin < min_date {
-            min_date = candle.begin;
-        }
-        if candle.end > max_date {
-            max_date = candle.end;
-        }
         if candle.low < min_low {
             min_low = candle.low;
         }
@@ -97,13 +140,11 @@ async fn fetch_data<'a>(
 
     let min_y = f32::floor(min_low);
     let max_y = f32::ceil(max_high);
-    let plot_pos_start = Vector2::new(300.0, 20.0);
-    let plot_pos_end = Vector2::new(W - 20.0, 240.0 - 20.0);
-    let step_y = (plot_pos_end.y - plot_pos_start.y) / (max_y - min_y);
+    let step_y = (end_pos.y - start_pos.y) / (max_y - min_y);
 
     let coords = DrawCoords {
-        start_pos: plot_pos_start,
-        end_pos: plot_pos_end,
+        start_pos,
+        end_pos,
         step_y,
         min_y,
         max_y,

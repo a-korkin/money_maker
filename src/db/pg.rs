@@ -74,7 +74,12 @@ pub async fn get_securities_str(pool: &PgPool) -> String {
     result.0
 }
 
-pub async fn get_candles(pool: &PgPool, security: &str, date: NaiveDateTime) -> Vec<Candle> {
+pub async fn get_candles(
+    pool: &PgPool,
+    security: &str,
+    date: NaiveDateTime,
+    limit: i32,
+) -> Vec<Candle> {
     let sql = r#"
     select a.open, a.close, a.high, a.low, a.value, a.volume, a.begin, a.end
     from
@@ -94,11 +99,13 @@ pub async fn get_candles(pool: &PgPool, security: &str, date: NaiveDateTime) -> 
         group by cdate, hour
     ) as a
     order by a.begin
+    limit $3
         "#;
 
     let result: Vec<Candle> = sqlx::query_as(sql)
         .bind(security)
         .bind(date)
+        .bind(limit)
         .fetch_all(pool)
         .await
         .unwrap();
