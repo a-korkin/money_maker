@@ -77,7 +77,8 @@ pub async fn get_securities_str(pool: &PgPool) -> String {
 pub async fn get_candles(
     pool: &PgPool,
     security: &str,
-    date: NaiveDateTime,
+    begin: NaiveDateTime,
+    end: NaiveDateTime,
     limit: i32,
 ) -> Vec<Candle> {
     let sql = r#"
@@ -95,16 +96,18 @@ pub async fn get_candles(
         from public.candles as c
         inner join public.securities as s on s.id = c.security_id
         where s.code = $1
-            and c.begin_t::date = $2
+            and c.begin_t::date >= $2
+            and c.end_t::date <= $3
         group by cdate, hour
     ) as a
     order by a.begin
-    limit $3
+    limit $4
         "#;
 
     let result: Vec<Candle> = sqlx::query_as(sql)
         .bind(security)
-        .bind(date)
+        .bind(begin)
+        .bind(end)
         .bind(limit)
         .fetch_all(pool)
         .await

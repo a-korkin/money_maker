@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::db::pg;
 use crate::models::common::Candle;
 use chrono::{NaiveDate, NaiveDateTime, Timelike};
@@ -8,6 +10,7 @@ const H: f32 = 320.0; //480.0;
 const W: f32 = 1280.0;
 const CANDLE_W: f32 = 12.0;
 const COUNT_Y: f32 = 10.0;
+const DATE_TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
 #[allow(dead_code)]
 struct DrawCoords {
@@ -22,35 +25,27 @@ enum Period {
     Hour,
 }
 
-trait ToStrFormat {
-    fn to_str_fmt(self) -> String;
-}
-
-impl ToStrFormat for NaiveDateTime {
-    fn to_str_fmt(self) -> String {
-        format!("{}0", self.to_string()[..18].to_string())
-    }
-}
-
 pub async fn run_terminal(pool: &PgPool) {
-    let date = NaiveDate::from_ymd_opt(2025, 3, 25)
+    let begin = NaiveDate::from_ymd_opt(2025, 3, 10)
         .unwrap()
         .and_hms_opt(0, 0, 0)
         .unwrap();
 
-    let end = NaiveDateTime::parse_from_str("2025-07-22 12:31:52", "%Y-%m-%d %H:%M:%S").unwrap();
+    // let end = NaiveDateTime::parse_from_str("2025-07-22 12:31:52", DATE_TIME_FMT).unwrap();
+    let end = begin + Duration::from_secs(60 * 60 * 24 * 10);
     let securities = pg::get_securities_str(pool).await;
     let secs: Vec<&str> = securities.split(";").collect();
     let mut selected_security = secs[0];
 
-    let (mut candles, mut coords) = fetch_data(pool, selected_security, date).await;
+    let (mut candles, mut coords) = fetch_data(pool, selected_security, begin, end).await;
 
     // ui
+    let alpha = 1.0;
     let mut securities_edit = false;
     let mut securities_active: i32 = 0;
-    let mut begin_str: String = date.to_str_fmt();
+    let mut begin_str: String = begin.format(DATE_TIME_FMT).to_string();
     let mut begin_edit = false;
-    let mut end_str: String = end.to_str_fmt();
+    let mut end_str: String = end.format(DATE_TIME_FMT).to_string();
     let mut end_edit = false;
 
     let (mut rl, thread) = raylib::init()
@@ -63,21 +58,9 @@ pub async fn run_terminal(pool: &PgPool) {
         let mut d = rl.begin_drawing(&thread);
 
         d.clear_background(Color::WHITE);
+        d.gui_set_alpha(alpha);
 
         d.gui_unlock();
-        if d.gui_dropdown_box(
-            Rectangle::new(25.0, 25.0, 125.0, 30.0),
-            &securities,
-            &mut securities_active,
-            securities_edit,
-        ) {
-            securities_edit = !securities_edit;
-            if secs[securities_active as usize] != selected_security {
-                selected_security = secs[securities_active as usize];
-                (candles, coords) = fetch_data(pool, selected_security, date).await;
-            }
-        }
-
         d.draw_text_ex(
             d.get_font_default(),
             "BEGIN",
@@ -109,6 +92,23 @@ pub async fn run_terminal(pool: &PgPool) {
         ) {
             end_edit = !end_edit;
         }
+        if securities_edit {
+            d.gui_lock();
+        }
+
+        d.gui_unlock();
+        if d.gui_dropdown_box(
+            Rectangle::new(25.0, 25.0, 125.0, 30.0),
+            &securities,
+            &mut securities_active,
+            securities_edit,
+        ) {
+            securities_edit = !securities_edit;
+            if secs[securities_active as usize] != selected_security {
+                selected_security = secs[securities_active as usize];
+                (candles, coords) = fetch_data(pool, selected_security, begin, end).await;
+            }
+        }
 
         draw_axis(&mut d, &coords, Period::Hour);
         draw_candles(&mut d, &coords, &candles);
@@ -118,14 +118,15 @@ pub async fn run_terminal(pool: &PgPool) {
 async fn fetch_data<'a>(
     pool: &'a PgPool,
     security: &'a str,
-    date: NaiveDateTime,
+    begin: NaiveDateTime,
+    end: NaiveDateTime,
 ) -> (Vec<Candle>, DrawCoords) {
     let start_pos = Vector2::new(300.0, 20.0);
     let end_pos = Vector2::new(W - 20.0, 240.0 - 20.0);
 
-    let limit = ((end_pos.x - start_pos.x) / CANDLE_W) as i32;
+    let limit = ((end_pos.x - start_pos.x) / CANDLE_W) as i32 - 1;
 
-    let candles = pg::get_candles(pool, &security, date, limit).await;
+    let candles = pg::get_candles(pool, &security, begin, end, limit).await;
     let mut min_low: f32 = candles.first().unwrap().low;
     let mut max_high: f32 = 0_f32;
 
