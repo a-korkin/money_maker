@@ -2,7 +2,10 @@ use std::time::Duration;
 
 use crate::db::pg;
 use crate::models::common::Candle;
+use chrono::Datelike;
 use chrono::{NaiveDate, NaiveDateTime, Timelike};
+use raylib::prelude::GuiControlProperty::*;
+use raylib::prelude::GuiTextAlignment::*;
 use raylib::prelude::*;
 use sqlx::PgPool;
 
@@ -31,7 +34,6 @@ pub async fn run_terminal(pool: &PgPool) {
         .and_hms_opt(0, 0, 0)
         .unwrap();
 
-    // let end = NaiveDateTime::parse_from_str("2025-07-22 12:31:52", DATE_TIME_FMT).unwrap();
     let end = begin + Duration::from_secs(60 * 60 * 24 * 10);
     let securities = pg::get_securities_str(pool).await;
     let secs: Vec<&str> = securities.split(";").collect();
@@ -60,7 +62,10 @@ pub async fn run_terminal(pool: &PgPool) {
         d.clear_background(Color::WHITE);
         d.gui_set_alpha(alpha);
 
-        d.gui_unlock();
+        if securities_edit {
+            d.gui_lock();
+        }
+
         d.draw_text_ex(
             d.get_font_default(),
             "BEGIN",
@@ -92,11 +97,13 @@ pub async fn run_terminal(pool: &PgPool) {
         ) {
             end_edit = !end_edit;
         }
-        if securities_edit {
-            d.gui_lock();
-        }
 
         d.gui_unlock();
+        d.gui_set_style(
+            GuiControl::DROPDOWNBOX,
+            TEXT_ALIGNMENT,
+            TEXT_ALIGN_CENTER as i32,
+        );
         if d.gui_dropdown_box(
             Rectangle::new(25.0, 25.0, 125.0, 30.0),
             &securities,
@@ -231,6 +238,7 @@ fn convert_coords(start_pos: Vector2, step_y: f32, max_y: f32, in_value_y: f32) 
 }
 
 fn draw_candles(d: &mut RaylibDrawHandle, coords: &DrawCoords, candles: &Vec<Candle>) {
+    let mut day: u32 = 0;
     for (i, candle) in candles.iter().enumerate() {
         let x = coords.start_pos.x + (i as f32 * CANDLE_W);
         draw_candle(
@@ -241,6 +249,8 @@ fn draw_candles(d: &mut RaylibDrawHandle, coords: &DrawCoords, candles: &Vec<Can
             coords.step_y,
             coords.max_y,
         );
+
+        // print time labels of x-axis
         let hour = candle.begin.hour();
         let offset = match hour {
             0..=9 => 15.0,
@@ -252,6 +262,19 @@ fn draw_candles(d: &mut RaylibDrawHandle, coords: &DrawCoords, candles: &Vec<Can
                 d.get_font_default(),
                 &hour.to_string(),
                 Vector2::new(x + offset, coords.end_pos.y + 8.0),
+                10.0,
+                1.0,
+                Color::BLACK,
+            );
+        }
+        let day_label = candle.begin.format("%Y-%m-%d").to_string();
+        let current_day = candle.begin.day();
+        if current_day != day {
+            day = current_day;
+            d.draw_text_ex(
+                d.get_font_default(),
+                &day_label,
+                Vector2::new(x - 14.0, coords.end_pos.y + 20.0),
                 10.0,
                 1.0,
                 Color::BLACK,
