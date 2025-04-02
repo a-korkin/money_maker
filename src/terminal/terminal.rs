@@ -37,8 +37,28 @@ struct UiElements<'a> {
     end_edit: bool,
 }
 
-enum Period {
-    Hour,
+enum Frame {
+    H1,
+    D1,
+}
+
+impl From<&str> for Frame {
+    fn from(value: &str) -> Self {
+        match value {
+            "h1" => Self::H1,
+            "d1" => Self::D1,
+            _ => unimplemented!("from {} to [Frame] not implemented", value),
+        }
+    }
+}
+
+impl Into<String> for Frame {
+    fn into(self) -> String {
+        match self {
+            Frame::H1 => String::from("h1"),
+            Frame::D1 => String::from("d1"),
+        }
+    }
 }
 
 pub async fn run_terminal(pool: &PgPool) {
@@ -46,13 +66,20 @@ pub async fn run_terminal(pool: &PgPool) {
         .unwrap()
         .and_hms_opt(0, 0, 0)
         .unwrap();
-
     let mut end = begin + Duration::from_secs(60 * 60 * 24 * 10);
+
     let securities = pg::get_securities_str(pool).await;
     let secs: Vec<&str> = securities.split(";").collect();
     let selected_security = secs[0];
 
-    let (mut candles, mut coords) = fetch_data(pool, selected_security, begin, end).await;
+    let frames_str = "h1;d1";
+    let frames = &frames_str.split(";").collect::<Vec<&str>>();
+    let frame = Frame::from(frames[0]);
+    let mut current_frame = frames[0];
+    let mut frame_edit: bool = false;
+    let mut frame_active: i32 = 0;
+
+    let (mut candles, mut coords) = fetch_data(pool, selected_security, begin, end, &frame).await;
 
     // ui
     let alpha = 1.0;
@@ -81,7 +108,7 @@ pub async fn run_terminal(pool: &PgPool) {
         d.gui_set_alpha(alpha);
 
         //draw ui
-        if ui.securities_edit {
+        if ui.securities_edit || frame_edit {
             d.gui_lock();
         }
 
@@ -93,27 +120,52 @@ pub async fn run_terminal(pool: &PgPool) {
             "BEGIN",
             &mut begin,
         ) {
-            (candles, coords) = fetch_data(pool, ui.selected_security, begin, end).await;
+            (candles, coords) = fetch_data(pool, ui.selected_security, begin, end, &frame).await;
         }
 
-        draw_datepicker(
+        if draw_datepicker(
             &mut d,
             Vector2::new(25.0, 135.0),
             &mut ui.end_str,
             &mut ui.end_edit,
             "END",
             &mut end,
-        );
+        ) {
+            (candles, coords) = fetch_data(pool, ui.selected_security, begin, end, &frame).await;
+        }
 
-        if draw_dropdown(&mut d, &mut ui) {
+        if draw_dropdown(
+            &mut d,
+            ui.securities,
+            &mut ui.securities_active,
+            &mut ui.securities_edit,
+            Rectangle::new(25.0, 25.0, 80.0, 30.0),
+        ) {
             ui.securities_edit = !ui.securities_edit;
             if ui.secs[ui.securities_active as usize] != ui.selected_security {
                 ui.selected_security = ui.secs[ui.securities_active as usize];
-                (candles, coords) = fetch_data(pool, ui.selected_security, begin, end).await;
+                (candles, coords) =
+                    fetch_data(pool, ui.selected_security, begin, end, &frame).await;
             }
         }
 
-        draw_axis(&mut d, &coords, Period::Hour);
+        if draw_dropdown(
+            &mut d,
+            frames_str,
+            &mut frame_active,
+            &mut frame_edit,
+            Rectangle::new(110.0, 25.0, 80.0, 30.0),
+        ) {
+            frame_edit = !frame_edit;
+            if frames[frame_active as usize] != current_frame {
+                current_frame = frames[frame_active as usize];
+                println!("frame: {}", current_frame);
+                // (candles, coords) =
+                //     fetch_data(pool, ui.selected_security, begin, end, &frame).await;
+            }
+        }
+
+        draw_axis(&mut d, &coords, Frame::H1);
 
         draw_candles(&mut d, &coords, &candles);
     }
@@ -124,6 +176,7 @@ async fn fetch_data<'a>(
     security: &'a str,
     begin: NaiveDateTime,
     end: NaiveDateTime,
+    _frame: &Frame,
 ) -> (Vec<Candle>, DrawCoords) {
     let start_pos = Vector2::new(300.0, 20.0);
     let end_pos = Vector2::new(W - 20.0, 240.0 - 20.0);
@@ -158,7 +211,7 @@ async fn fetch_data<'a>(
     return (candles, coords);
 }
 
-fn draw_axis(d: &mut RaylibDrawHandle, coords: &DrawCoords, _period: Period) {
+fn draw_axis(d: &mut RaylibDrawHandle, coords: &DrawCoords, _frame: Frame) {
     let center = (coords.end_pos.x - coords.start_pos.x) / 2.0;
     // y-axis
     d.draw_line_v(
@@ -317,6 +370,7 @@ async fn draw_ui<'a>(
     coords: &mut DrawCoords,
     begin: NaiveDateTime,
     end: NaiveDateTime,
+    frame: &Frame,
 ) {
     if ui.securities_edit {
         d.gui_lock();
@@ -369,7 +423,7 @@ async fn draw_ui<'a>(
         ui.securities_edit = !ui.securities_edit;
         if ui.secs[ui.securities_active as usize] != ui.selected_security {
             ui.selected_security = ui.secs[ui.securities_active as usize];
-            (*candles, *coords) = fetch_data(pool, ui.selected_security, begin, end).await;
+            (*candles, *coords) = fetch_data(pool, ui.selected_security, begin, end, frame).await;
         }
     }
 }
@@ -414,17 +468,33 @@ fn draw_datepicker(
     false
 }
 
-fn draw_dropdown(d: &mut RaylibDrawHandle, ui: &mut UiElements) -> bool {
+// fn draw_dropdown(d: &mut RaylibDrawHandle, ui: &mut UiElements, position: Rectangle) -> bool {
+//     d.gui_unlock();
+//     d.gui_set_style(
+//         GuiControl::DROPDOWNBOX,
+//         TEXT_ALIGNMENT,
+//         TEXT_ALIGN_CENTER as i32,
+//     );
+//     d.gui_dropdown_box(
+//         position, //Rectangle::new(25.0, 25.0, 125.0, 30.0),
+//         ui.securities,
+//         &mut ui.securities_active,
+//         ui.securities_edit,
+//     )
+// }
+
+fn draw_dropdown(
+    d: &mut RaylibDrawHandle,
+    list: &str,
+    active: &mut i32,
+    edit: &mut bool,
+    position: Rectangle,
+) -> bool {
     d.gui_unlock();
     d.gui_set_style(
         GuiControl::DROPDOWNBOX,
         TEXT_ALIGNMENT,
         TEXT_ALIGN_CENTER as i32,
     );
-    d.gui_dropdown_box(
-        Rectangle::new(25.0, 25.0, 125.0, 30.0),
-        ui.securities,
-        &mut ui.securities_active,
-        ui.securities_edit,
-    )
+    d.gui_dropdown_box(position, list, active, *edit)
 }
