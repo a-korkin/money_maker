@@ -1454,6 +1454,7 @@ dependencies = [
  "log",
  "plotters",
  "raylib",
+ "regex",
  "reqwest",
  "serde",
  "sqlx",

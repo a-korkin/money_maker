@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use crate::db::pg;
 use crate::models::common::Candle;
 use chrono::Datelike;
@@ -7,7 +5,9 @@ use chrono::{NaiveDate, NaiveDateTime, Timelike};
 use raylib::prelude::GuiControlProperty::*;
 use raylib::prelude::GuiTextAlignment::*;
 use raylib::prelude::*;
+use regex::Regex;
 use sqlx::PgPool;
+use std::time::Duration;
 
 const H: f32 = 320.0; //480.0;
 const W: f32 = 1280.0;
@@ -42,12 +42,12 @@ enum Period {
 }
 
 pub async fn run_terminal(pool: &PgPool) {
-    let begin = NaiveDate::from_ymd_opt(2025, 3, 10)
+    let mut begin = NaiveDate::from_ymd_opt(2025, 3, 10)
         .unwrap()
         .and_hms_opt(0, 0, 0)
         .unwrap();
 
-    let end = begin + Duration::from_secs(60 * 60 * 24 * 10);
+    let mut end = begin + Duration::from_secs(60 * 60 * 24 * 10);
     let securities = pg::get_securities_str(pool).await;
     let secs: Vec<&str> = securities.split(";").collect();
     let selected_security = secs[0];
@@ -62,9 +62,9 @@ pub async fn run_terminal(pool: &PgPool) {
         secs,
         securities_edit: false,
         securities_active: 0,
-        begin_str: begin.format(DATE_TIME_FMT).to_string(),
+        begin_str: format!("{} ", begin.format(DATE_TIME_FMT)),
         begin_edit: false,
-        end_str: end.format(DATE_TIME_FMT).to_string(),
+        end_str: format!("{} ", end.format(DATE_TIME_FMT)),
         end_edit: false,
     };
 
@@ -85,13 +85,16 @@ pub async fn run_terminal(pool: &PgPool) {
             d.gui_lock();
         }
 
-        draw_datepicker(
+        if draw_datepicker(
             &mut d,
             Vector2::new(25.0, 90.0),
             &mut ui.begin_str,
             &mut ui.begin_edit,
-            "START",
-        );
+            "BEGIN",
+            &mut begin,
+        ) {
+            (candles, coords) = fetch_data(pool, ui.selected_security, begin, end).await;
+        }
 
         draw_datepicker(
             &mut d,
@@ -99,20 +102,10 @@ pub async fn run_terminal(pool: &PgPool) {
             &mut ui.end_str,
             &mut ui.end_edit,
             "END",
+            &mut end,
         );
 
-        d.gui_unlock();
-        d.gui_set_style(
-            GuiControl::DROPDOWNBOX,
-            TEXT_ALIGNMENT,
-            TEXT_ALIGN_CENTER as i32,
-        );
-        if d.gui_dropdown_box(
-            Rectangle::new(25.0, 25.0, 125.0, 30.0),
-            ui.securities,
-            &mut ui.securities_active,
-            ui.securities_edit,
-        ) {
+        if draw_dropdown(&mut d, &mut ui) {
             ui.securities_edit = !ui.securities_edit;
             if ui.secs[ui.securities_active as usize] != ui.selected_security {
                 ui.selected_security = ui.secs[ui.securities_active as usize];
@@ -120,8 +113,8 @@ pub async fn run_terminal(pool: &PgPool) {
             }
         }
 
-        // draw_ui(&mut d, &mut ui, pool, &mut candles, &mut coords, begin, end).await;
         draw_axis(&mut d, &coords, Period::Hour);
+
         draw_candles(&mut d, &coords, &candles);
     }
 }
@@ -387,11 +380,12 @@ fn draw_datepicker(
     ui_str: &mut String,
     ui_edit: &mut bool,
     label: &str,
-) {
+    date: &mut NaiveDateTime,
+) -> bool {
     d.draw_text_ex(
         d.get_font_default(),
         label,
-        position, // Vector2::new(25.0, 135.0),
+        position,
         10.0,
         1.0,
         Color::BLACK,
@@ -402,5 +396,35 @@ fn draw_datepicker(
         *ui_edit,
     ) {
         *ui_edit = !*ui_edit;
+        let re = Regex::new(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}").unwrap();
+        if re.is_match(ui_str) {
+            match NaiveDateTime::parse_from_str(&ui_str[..19], DATE_TIME_FMT) {
+                Ok(d) => {
+                    *date = d;
+                    return true;
+                }
+                Err(e) => {
+                    println!("===================================");
+                    println!("[ERROR]: {e}, value: {}", ui_str);
+                }
+            }
+        }
     }
+
+    false
+}
+
+fn draw_dropdown(d: &mut RaylibDrawHandle, ui: &mut UiElements) -> bool {
+    d.gui_unlock();
+    d.gui_set_style(
+        GuiControl::DROPDOWNBOX,
+        TEXT_ALIGNMENT,
+        TEXT_ALIGN_CENTER as i32,
+    );
+    d.gui_dropdown_box(
+        Rectangle::new(25.0, 25.0, 125.0, 30.0),
+        ui.securities,
+        &mut ui.securities_active,
+        ui.securities_edit,
+    )
 }
