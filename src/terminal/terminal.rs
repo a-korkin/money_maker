@@ -24,6 +24,19 @@ struct DrawCoords {
     max_y: f32,
 }
 
+#[allow(dead_code)]
+struct UiElements<'a> {
+    securities: &'a str,
+    selected_security: &'a str,
+    secs: Vec<&'a str>,
+    securities_edit: bool,
+    securities_active: i32,
+    begin_str: String,
+    begin_edit: bool,
+    end_str: String,
+    end_edit: bool,
+}
+
 enum Period {
     Hour,
 }
@@ -37,18 +50,23 @@ pub async fn run_terminal(pool: &PgPool) {
     let end = begin + Duration::from_secs(60 * 60 * 24 * 10);
     let securities = pg::get_securities_str(pool).await;
     let secs: Vec<&str> = securities.split(";").collect();
-    let mut selected_security = secs[0];
+    let selected_security = secs[0];
 
     let (mut candles, mut coords) = fetch_data(pool, selected_security, begin, end).await;
 
     // ui
     let alpha = 1.0;
-    let mut securities_edit = false;
-    let mut securities_active: i32 = 0;
-    let mut begin_str: String = begin.format(DATE_TIME_FMT).to_string();
-    let mut begin_edit = false;
-    let mut end_str: String = end.format(DATE_TIME_FMT).to_string();
-    let mut end_edit = false;
+    let mut ui = UiElements {
+        securities: &securities,
+        selected_security,
+        secs,
+        securities_edit: false,
+        securities_active: 0,
+        begin_str: begin.format(DATE_TIME_FMT).to_string(),
+        begin_edit: false,
+        end_str: end.format(DATE_TIME_FMT).to_string(),
+        end_edit: false,
+    };
 
     let (mut rl, thread) = raylib::init()
         .size(W as i32, H as i32)
@@ -62,41 +80,26 @@ pub async fn run_terminal(pool: &PgPool) {
         d.clear_background(Color::WHITE);
         d.gui_set_alpha(alpha);
 
-        if securities_edit {
+        //draw ui
+        if ui.securities_edit {
             d.gui_lock();
         }
 
-        d.draw_text_ex(
-            d.get_font_default(),
-            "BEGIN",
+        draw_datepicker(
+            &mut d,
             Vector2::new(25.0, 90.0),
-            10.0,
-            1.0,
-            Color::BLACK,
+            &mut ui.begin_str,
+            &mut ui.begin_edit,
+            "START",
         );
-        if d.gui_text_box(
-            Rectangle::new(25.0, 100.0, 125.0, 30.0),
-            &mut begin_str,
-            begin_edit,
-        ) {
-            begin_edit = !begin_edit;
-        }
 
-        d.draw_text_ex(
-            d.get_font_default(),
-            "END",
+        draw_datepicker(
+            &mut d,
             Vector2::new(25.0, 135.0),
-            10.0,
-            1.0,
-            Color::BLACK,
+            &mut ui.end_str,
+            &mut ui.end_edit,
+            "END",
         );
-        if d.gui_text_box(
-            Rectangle::new(25.0, 145.0, 125.0, 30.0),
-            &mut end_str,
-            end_edit,
-        ) {
-            end_edit = !end_edit;
-        }
 
         d.gui_unlock();
         d.gui_set_style(
@@ -106,17 +109,18 @@ pub async fn run_terminal(pool: &PgPool) {
         );
         if d.gui_dropdown_box(
             Rectangle::new(25.0, 25.0, 125.0, 30.0),
-            &securities,
-            &mut securities_active,
-            securities_edit,
+            ui.securities,
+            &mut ui.securities_active,
+            ui.securities_edit,
         ) {
-            securities_edit = !securities_edit;
-            if secs[securities_active as usize] != selected_security {
-                selected_security = secs[securities_active as usize];
-                (candles, coords) = fetch_data(pool, selected_security, begin, end).await;
+            ui.securities_edit = !ui.securities_edit;
+            if ui.secs[ui.securities_active as usize] != ui.selected_security {
+                ui.selected_security = ui.secs[ui.securities_active as usize];
+                (candles, coords) = fetch_data(pool, ui.selected_security, begin, end).await;
             }
         }
 
+        // draw_ui(&mut d, &mut ui, pool, &mut candles, &mut coords, begin, end).await;
         draw_axis(&mut d, &coords, Period::Hour);
         draw_candles(&mut d, &coords, &candles);
     }
@@ -267,13 +271,12 @@ fn draw_candles(d: &mut RaylibDrawHandle, coords: &DrawCoords, candles: &Vec<Can
                 Color::BLACK,
             );
         }
-        let day_label = candle.begin.format("%Y-%m-%d").to_string();
         let current_day = candle.begin.day();
         if current_day != day {
             day = current_day;
             d.draw_text_ex(
                 d.get_font_default(),
-                &day_label,
+                &candle.begin.format("%Y-%m-%d").to_string(),
                 Vector2::new(x - 14.0, coords.end_pos.y + 20.0),
                 10.0,
                 1.0,
@@ -310,4 +313,94 @@ fn draw_candle(
         convert_coords(start_pos, step_y, max_y, candle.low),
     );
     d.draw_line_v(high, low, color);
+}
+
+#[allow(dead_code)]
+async fn draw_ui<'a>(
+    d: &mut RaylibDrawHandle<'a>,
+    ui: &mut UiElements<'a>,
+    pool: &'a PgPool,
+    candles: &mut Vec<Candle>,
+    coords: &mut DrawCoords,
+    begin: NaiveDateTime,
+    end: NaiveDateTime,
+) {
+    if ui.securities_edit {
+        d.gui_lock();
+    }
+
+    d.draw_text_ex(
+        d.get_font_default(),
+        "BEGIN",
+        Vector2::new(25.0, 90.0),
+        10.0,
+        1.0,
+        Color::BLACK,
+    );
+    if d.gui_text_box(
+        Rectangle::new(25.0, 100.0, 125.0, 30.0),
+        &mut ui.begin_str,
+        ui.begin_edit,
+    ) {
+        ui.begin_edit = !ui.begin_edit;
+    }
+
+    d.draw_text_ex(
+        d.get_font_default(),
+        "END",
+        Vector2::new(25.0, 135.0),
+        10.0,
+        1.0,
+        Color::BLACK,
+    );
+    if d.gui_text_box(
+        Rectangle::new(25.0, 145.0, 125.0, 30.0),
+        &mut ui.end_str,
+        ui.end_edit,
+    ) {
+        ui.end_edit = !ui.end_edit;
+    }
+
+    d.gui_unlock();
+    d.gui_set_style(
+        GuiControl::DROPDOWNBOX,
+        TEXT_ALIGNMENT,
+        TEXT_ALIGN_CENTER as i32,
+    );
+    if d.gui_dropdown_box(
+        Rectangle::new(25.0, 25.0, 125.0, 30.0),
+        ui.securities,
+        &mut ui.securities_active,
+        ui.securities_edit,
+    ) {
+        ui.securities_edit = !ui.securities_edit;
+        if ui.secs[ui.securities_active as usize] != ui.selected_security {
+            ui.selected_security = ui.secs[ui.securities_active as usize];
+            (*candles, *coords) = fetch_data(pool, ui.selected_security, begin, end).await;
+        }
+    }
+}
+
+fn draw_datepicker(
+    d: &mut RaylibDrawHandle,
+    position: Vector2,
+    ui_str: &mut String,
+    ui_edit: &mut bool,
+    label: &str,
+) {
+    d.draw_text_ex(
+        d.get_font_default(),
+        label,
+        position, // Vector2::new(25.0, 135.0),
+        10.0,
+        1.0,
+        Color::BLACK,
+    );
+    if d.gui_text_box(
+        Rectangle::new(position.x, position.y + 10.0, 125.0, 30.0),
+        ui_str,
+        *ui_edit,
+    ) {
+        *ui_edit = !*ui_edit;
+    }
 }
