@@ -172,9 +172,8 @@ pub async fn run_terminal(pool: &PgPool) {
             }
         }
 
-        draw_axis(&mut d, &coords, Frame::H1);
-
-        draw_candles(&mut d, &coords, &candles);
+        draw_axis(&mut d, &coords);
+        draw_candles(&mut d, &coords, &candles, &Frame::from(current_frame));
     }
 }
 
@@ -218,7 +217,7 @@ async fn fetch_data<'a>(
     return (candles, coords);
 }
 
-fn draw_axis(d: &mut RaylibDrawHandle, coords: &DrawCoords, _frame: Frame) {
+fn draw_axis(d: &mut RaylibDrawHandle, coords: &DrawCoords) {
     let center = (coords.end_pos.x - coords.start_pos.x) / 2.0;
     // y-axis
     d.draw_line_v(
@@ -294,8 +293,14 @@ fn convert_coords(start_pos: Vector2, step_y: f32, max_y: f32, in_value_y: f32) 
     (max_y - in_value_y) * step_y + start_pos.y
 }
 
-fn draw_candles(d: &mut RaylibDrawHandle, coords: &DrawCoords, candles: &Vec<Candle>) {
+fn draw_candles(
+    d: &mut RaylibDrawHandle,
+    coords: &DrawCoords,
+    candles: &Vec<Candle>,
+    frame: &Frame,
+) {
     let mut day: u32 = 0;
+    let mut month: u32 = 0;
     for (i, candle) in candles.iter().enumerate() {
         let x = coords.start_pos.x + (i as f32 * CANDLE_W);
         draw_candle(
@@ -307,35 +312,87 @@ fn draw_candles(d: &mut RaylibDrawHandle, coords: &DrawCoords, candles: &Vec<Can
             coords.max_y,
         );
 
-        // print time labels of x-axis
-        let hour = candle.begin.hour();
-        let offset = match hour {
-            0..=9 => 15.0,
-            10..=19 => 14.0,
-            _ => 13.0,
-        };
-        if hour % 3 == 0 {
-            d.draw_text_ex(
-                d.get_font_default(),
-                &hour.to_string(),
-                Vector2::new(x + offset, coords.end_pos.y + 8.0),
-                10.0,
-                1.0,
-                Color::BLACK,
-            );
+        // print time labels on x-axis
+        match frame {
+            Frame::H1 => {
+                draw_frames_h1(d, candle.begin, &mut day, Vector2::new(x, coords.end_pos.y))
+            }
+            Frame::D1 => draw_frame_d1(
+                d,
+                candle.begin,
+                &mut month,
+                Vector2::new(x, coords.end_pos.y),
+            ),
         }
-        let current_day = candle.begin.day();
-        if current_day != day {
-            day = current_day;
-            d.draw_text_ex(
-                d.get_font_default(),
-                &candle.begin.format("%Y-%m-%d").to_string(),
-                Vector2::new(x - 14.0, coords.end_pos.y + 20.0),
-                10.0,
-                1.0,
-                Color::BLACK,
-            );
-        }
+    }
+}
+
+fn draw_frame_d1(
+    d: &mut RaylibDrawHandle,
+    date: NaiveDateTime,
+    month: &mut u32,
+    position: Vector2,
+) {
+    let day = date.day();
+    let offset = match day {
+        1..=9 => 16.0,
+        10..=19 => 14.0,
+        _ => 12.0,
+    };
+
+    if day == 1 || day % 2 == 0 {
+        d.draw_text_ex(
+            d.get_font_default(),
+            &day.to_string(),
+            Vector2::new(position.x + offset, position.y + 8.0),
+            10.0,
+            1.0,
+            Color::BLACK,
+        );
+    }
+
+    let current_month = date.month();
+    if current_month != *month {
+        *month = current_month;
+        d.draw_text_ex(
+            d.get_font_default(),
+            &date.format("%Y-%m").to_string(),
+            Vector2::new(position.x - 8.0, position.y + 20.0),
+            10.0,
+            1.0,
+            Color::BLACK,
+        );
+    }
+}
+
+fn draw_frames_h1(d: &mut RaylibDrawHandle, date: NaiveDateTime, day: &mut u32, position: Vector2) {
+    let hour = date.hour();
+    let offset = match hour {
+        0..=9 => 15.0,
+        10..=19 => 14.0,
+        _ => 13.0,
+    };
+    if hour % 3 == 0 {
+        d.draw_text_ex(
+            d.get_font_default(),
+            &hour.to_string(),
+            Vector2::new(position.x + offset, position.y + 8.0),
+            10.0,
+            1.0,
+            Color::BLACK,
+        );
+    }
+    let current_day = date.day();
+    if current_day != *day {
+        *day = current_day;
+        d.draw_text_ex(
+            d.get_font_default(),
+            &date.format("%Y-%m-%d").to_string(),
+            Vector2::new(position.x - 14.0, position.y + 20.0),
+            10.0,
+            1.0,
+            Color::BLACK,
+        );
     }
 }
 
