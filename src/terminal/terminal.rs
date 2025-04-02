@@ -1,5 +1,5 @@
 use crate::db::pg;
-use crate::models::common::Candle;
+use crate::models::common::{Candle, Frame};
 use chrono::Datelike;
 use chrono::{NaiveDate, NaiveDateTime, Timelike};
 use raylib::prelude::GuiControlProperty::*;
@@ -37,30 +37,6 @@ struct UiElements<'a> {
     end_edit: bool,
 }
 
-enum Frame {
-    H1,
-    D1,
-}
-
-impl From<&str> for Frame {
-    fn from(value: &str) -> Self {
-        match value {
-            "h1" => Self::H1,
-            "d1" => Self::D1,
-            _ => unimplemented!("from {} to [Frame] not implemented", value),
-        }
-    }
-}
-
-impl Into<String> for Frame {
-    fn into(self) -> String {
-        match self {
-            Frame::H1 => String::from("h1"),
-            Frame::D1 => String::from("d1"),
-        }
-    }
-}
-
 pub async fn run_terminal(pool: &PgPool) {
     let mut begin = NaiveDate::from_ymd_opt(2025, 3, 10)
         .unwrap()
@@ -74,12 +50,18 @@ pub async fn run_terminal(pool: &PgPool) {
 
     let frames_str = "h1;d1";
     let frames = &frames_str.split(";").collect::<Vec<&str>>();
-    let frame = Frame::from(frames[0]);
     let mut current_frame = frames[0];
     let mut frame_edit: bool = false;
     let mut frame_active: i32 = 0;
 
-    let (mut candles, mut coords) = fetch_data(pool, selected_security, begin, end, &frame).await;
+    let (mut candles, mut coords) = fetch_data(
+        pool,
+        selected_security,
+        begin,
+        end,
+        &Frame::from(current_frame),
+    )
+    .await;
 
     // ui
     let alpha = 1.0;
@@ -120,7 +102,14 @@ pub async fn run_terminal(pool: &PgPool) {
             "BEGIN",
             &mut begin,
         ) {
-            (candles, coords) = fetch_data(pool, ui.selected_security, begin, end, &frame).await;
+            (candles, coords) = fetch_data(
+                pool,
+                ui.selected_security,
+                begin,
+                end,
+                &Frame::from(current_frame),
+            )
+            .await;
         }
 
         if draw_datepicker(
@@ -131,7 +120,14 @@ pub async fn run_terminal(pool: &PgPool) {
             "END",
             &mut end,
         ) {
-            (candles, coords) = fetch_data(pool, ui.selected_security, begin, end, &frame).await;
+            (candles, coords) = fetch_data(
+                pool,
+                ui.selected_security,
+                begin,
+                end,
+                &Frame::from(current_frame),
+            )
+            .await;
         }
 
         if draw_dropdown(
@@ -144,8 +140,14 @@ pub async fn run_terminal(pool: &PgPool) {
             ui.securities_edit = !ui.securities_edit;
             if ui.secs[ui.securities_active as usize] != ui.selected_security {
                 ui.selected_security = ui.secs[ui.securities_active as usize];
-                (candles, coords) =
-                    fetch_data(pool, ui.selected_security, begin, end, &frame).await;
+                (candles, coords) = fetch_data(
+                    pool,
+                    ui.selected_security,
+                    begin,
+                    end,
+                    &Frame::from(current_frame),
+                )
+                .await;
             }
         }
 
@@ -159,9 +161,14 @@ pub async fn run_terminal(pool: &PgPool) {
             frame_edit = !frame_edit;
             if frames[frame_active as usize] != current_frame {
                 current_frame = frames[frame_active as usize];
-                println!("frame: {}", current_frame);
-                // (candles, coords) =
-                //     fetch_data(pool, ui.selected_security, begin, end, &frame).await;
+                (candles, coords) = fetch_data(
+                    pool,
+                    ui.selected_security,
+                    begin,
+                    end,
+                    &Frame::from(current_frame),
+                )
+                .await;
             }
         }
 
@@ -176,14 +183,14 @@ async fn fetch_data<'a>(
     security: &'a str,
     begin: NaiveDateTime,
     end: NaiveDateTime,
-    _frame: &Frame,
+    frame: &Frame,
 ) -> (Vec<Candle>, DrawCoords) {
     let start_pos = Vector2::new(300.0, 20.0);
     let end_pos = Vector2::new(W - 20.0, 240.0 - 20.0);
 
     let limit = ((end_pos.x - start_pos.x) / CANDLE_W) as i32 - 1;
 
-    let candles = pg::get_candles(pool, &security, begin, end, limit).await;
+    let candles = pg::get_candles(pool, &security, begin, end, limit, frame).await;
     let mut min_low: f32 = candles.first().unwrap().low;
     let mut max_high: f32 = 0_f32;
 
@@ -467,21 +474,6 @@ fn draw_datepicker(
 
     false
 }
-
-// fn draw_dropdown(d: &mut RaylibDrawHandle, ui: &mut UiElements, position: Rectangle) -> bool {
-//     d.gui_unlock();
-//     d.gui_set_style(
-//         GuiControl::DROPDOWNBOX,
-//         TEXT_ALIGNMENT,
-//         TEXT_ALIGN_CENTER as i32,
-//     );
-//     d.gui_dropdown_box(
-//         position, //Rectangle::new(25.0, 25.0, 125.0, 30.0),
-//         ui.securities,
-//         &mut ui.securities_active,
-//         ui.securities_edit,
-//     )
-// }
 
 fn draw_dropdown(
     d: &mut RaylibDrawHandle,

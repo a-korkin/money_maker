@@ -27,6 +27,30 @@ impl Into<String> for SecuritiesStr {
     }
 }
 
+pub enum Frame {
+    H1,
+    D1,
+}
+
+impl From<&str> for Frame {
+    fn from(value: &str) -> Self {
+        match value {
+            "h1" => Self::H1,
+            "d1" => Self::D1,
+            _ => unimplemented!("from {} to [Frame] not implemented", value),
+        }
+    }
+}
+
+impl ToString for Frame {
+    fn to_string(&self) -> String {
+        match self {
+            Frame::H1 => String::from("h1"),
+            Frame::D1 => String::from("d1"),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, sqlx::FromRow)]
 #[allow(dead_code)]
 pub struct Candle {

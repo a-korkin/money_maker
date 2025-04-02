@@ -1,4 +1,4 @@
-use crate::models::common::{Candle, SecuritiesStr, ToSql};
+use crate::models::common::{Candle, Frame, SecuritiesStr, ToSql};
 use chrono::NaiveDateTime;
 use dotenv;
 use sqlx::postgres::PgPool;
@@ -80,8 +80,11 @@ pub async fn get_candles(
     begin: NaiveDateTime,
     end: NaiveDateTime,
     limit: i32,
+    frame: &Frame,
 ) -> Vec<Candle> {
-    let sql = r#"
+    let sql = match frame {
+        Frame::H1 => {
+            r#"
     select a.open, a.close, a.high, a.low, a.value, a.volume, a.begin, a.end
     from
     (
@@ -102,7 +105,33 @@ pub async fn get_candles(
     ) as a
     order by a.begin
     limit $4
-        "#;
+        "#
+        }
+        Frame::D1 => {
+            r#"
+    select a.open, a.close, a.high, a.low, a.value, a.volume, a.begin, a.end
+    from
+    (
+        select 
+            (array_agg(open order by c.begin_t))[1]::float4 as open, 
+            (array_agg(close order by c.end_t desc))[1]::float4 as close, 
+            max(c.high)::float4 as high, min(c.low)::float4 as low, 
+            sum(c.value)::float4 as value, 
+            sum(c.volume)::float4 as volume, 
+            min(c.begin_t) as begin, max(c.end_t) as end,
+            c.begin_t::date as cdate
+        from public.candles as c
+        inner join public.securities as s on s.id = c.security_id
+        where s.code = $1
+            and c.begin_t::date >= $2
+            and c.end_t::date <= $3
+        group by cdate
+    ) as a
+    order by a.begin
+    limit $4
+        "#
+        }
+    };
 
     let result: Vec<Candle> = sqlx::query_as(sql)
         .bind(security)
