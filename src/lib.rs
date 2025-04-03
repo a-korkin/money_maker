@@ -41,14 +41,18 @@ struct Args {
 
 pub async fn run() {
     logger::init().expect("failed to init logging");
+    let pool = pg::init_db().await;
 
     let args = Args::parse();
 
-    let securities = args
-        .secs
-        .split(",")
-        .map(|s| s.trim().to_uppercase().to_owned())
-        .collect::<Vec<String>>();
+    let securities = match args.secs.as_str() {
+        "all" => pg::get_all_securities(&pool).await,
+        _ => args
+            .secs
+            .split(",")
+            .map(|s| s.trim().to_uppercase().to_owned())
+            .collect::<Vec<String>>(),
+    };
 
     let start: DateTime<Utc> = dotenv::var("PERIOD_START")
         .expect("failed to get PERIOD_START")
@@ -71,7 +75,6 @@ pub async fn run() {
     }
 
     if args.add {
-        let pool = pg::init_db().await;
         pg::add_securities(&pool, &securities).await;
 
         insert_candles(&pool, &securities).await;

@@ -74,6 +74,22 @@ pub async fn get_securities_str(pool: &PgPool) -> String {
     result.0
 }
 
+pub async fn get_all_securities(pool: &PgPool) -> Vec<String> {
+    let result: Vec<SecuritiesStr> = sqlx::query_as(
+        r#"
+    select code from public.securities
+        "#,
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap();
+
+    return result
+        .iter()
+        .map(|a| a.0.to_owned())
+        .collect::<Vec<String>>();
+}
+
 pub async fn get_candles(
     pool: &PgPool,
     security: &str,
