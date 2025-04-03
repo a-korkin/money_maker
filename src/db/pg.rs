@@ -1,9 +1,8 @@
-use crate::models::common::{Candle, Frame, SecuritiesStr, ToSql};
+use crate::models::common::{Candle, Frame, Operation, SecuritiesStr, ToSql};
 use chrono::NaiveDateTime;
 use dotenv;
-use sqlx::postgres::PgPool;
+use sqlx::{postgres::PgPool, types::Uuid};
 
-#[allow(dead_code)]
 pub async fn init_db() -> PgPool {
     let db_url = dotenv::var("DATABASE_URL").expect("failed to DATABASE_URL");
     let pool = PgPool::connect(&db_url)
@@ -12,7 +11,6 @@ pub async fn init_db() -> PgPool {
     pool
 }
 
-#[allow(dead_code)]
 pub async fn add_securities(pool: &PgPool, securities: &Vec<String>) {
     let sql = r#"
     insert into public.securities(code)
@@ -32,7 +30,6 @@ pub async fn add_securities(pool: &PgPool, securities: &Vec<String>) {
         .expect("failed to insert securities");
 }
 
-#[allow(dead_code)]
 pub async fn add_candles(pool: &PgPool, security: &str, candles: &Vec<Candle>) -> u64 {
     let row: (String,) = sqlx::query_as("select id::text from public.securities where code = $1")
         .bind(security)
@@ -178,4 +175,35 @@ pub async fn get_candles(
         .unwrap();
 
     result
+}
+
+pub async fn add_operation(pool: &PgPool, operation: &Operation) {
+    let prev_uuid = match &operation.prev {
+        Some(a) => Some(a.id),
+        _ => None,
+    };
+    let sql = r#"
+    insert into public.operations(
+        id, attempt, operation_type, security_id, count,
+        price, commission, time_at, sum_before, sum_after, prev)
+    select $1, $2, $3, s.id, $5, $6, $7, $8, $9, $10, $11
+    from public.securities as s
+    where s.code = $4
+        "#;
+
+    let _ = sqlx::query(sql)
+        .bind(operation.id)
+        .bind(operation.attempt)
+        .bind(operation.operation_type.to_string())
+        .bind(&operation.security)
+        .bind(operation.count)
+        .bind(operation.price)
+        .bind(operation.commission)
+        .bind(operation.time_at)
+        .bind(operation.sum_before)
+        .bind(operation.sum_after)
+        .bind(prev_uuid)
+        .execute(pool)
+        .await
+        .unwrap();
 }

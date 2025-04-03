@@ -1,5 +1,6 @@
 mod db;
 mod models;
+mod strategy;
 mod terminal;
 mod utils;
 
@@ -45,14 +46,16 @@ struct Args {
 
 pub async fn run() {
     logger::init().expect("failed to init logging");
+    let pool = pg::init_db().await;
 
     let args = Args::parse();
     if args.terminal {
-        run_terminal().await;
+        run_terminal(&pool).await;
         return;
     }
 
-    let pool = pg::init_db().await;
+    strategy::strategy::create_operation(&pool).await;
+    return;
 
     let securities = match args.secs.as_str() {
         "all" => pg::get_all_securities(&pool).await,
@@ -89,9 +92,8 @@ pub async fn run() {
     }
 }
 
-pub async fn run_terminal() {
-    let pool = pg::init_db().await;
-    terminal::terminal::run_terminal(&pool).await;
+pub async fn run_terminal(pool: &PgPool) {
+    terminal::terminal::run_terminal(pool).await;
 }
 
 pub async fn fetch_data(securities: &Vec<String>, start: DateTime<Utc>, end: DateTime<Utc>) {

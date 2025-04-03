@@ -1,6 +1,7 @@
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use serde::Deserialize;
 use sqlx;
+use sqlx::types::Uuid;
 use std::mem;
 
 pub mod unix_timestamp {
@@ -101,4 +102,43 @@ impl Iterator for DateRange {
             None
         }
     }
+}
+
+pub enum OperationType {
+    Purchase,
+    Sale,
+}
+
+impl From<&str> for OperationType {
+    fn from(value: &str) -> Self {
+        match value {
+            "purchase" => Self::Purchase,
+            "sale" => Self::Sale,
+            _ => unimplemented!("operation type: {} not implemented", value),
+        }
+    }
+}
+
+impl ToString for OperationType {
+    fn to_string(&self) -> String {
+        match self {
+            OperationType::Purchase => String::from("purchase"),
+            OperationType::Sale => String::from("sale"),
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub struct Operation {
+    pub id: Uuid,
+    pub attempt: Uuid,
+    pub operation_type: OperationType,
+    pub security: String,
+    pub count: i32,
+    pub price: f32,
+    pub commission: f32,
+    pub time_at: NaiveDateTime,
+    pub sum_before: f32,
+    pub sum_after: f32,
+    pub prev: Option<Box<Operation>>,
 }
