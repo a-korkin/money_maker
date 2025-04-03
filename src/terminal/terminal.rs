@@ -48,11 +48,11 @@ pub async fn run_terminal(pool: &PgPool) {
     let secs: Vec<&str> = securities.split(";").collect();
     let selected_security = secs[0];
 
-    let frames_str = "h1;d1";
+    let frames_str = "m1;h1;d1";
     let frames = &frames_str.split(";").collect::<Vec<&str>>();
-    let mut current_frame = frames[0];
+    let mut frame_active: i32 = 1;
+    let mut current_frame = frames[frame_active as usize];
     let mut frame_edit: bool = false;
-    let mut frame_active: i32 = 0;
 
     let (mut candles, mut coords) = fetch_data(
         pool,
@@ -314,6 +314,9 @@ fn draw_candles(
 
         // print time labels on x-axis
         match frame {
+            Frame::M1 => {
+                draw_frames_m1(d, candle.begin, &mut day, Vector2::new(x, coords.end_pos.y))
+            }
             Frame::H1 => {
                 draw_frames_h1(d, candle.begin, &mut day, Vector2::new(x, coords.end_pos.y))
             }
@@ -324,6 +327,50 @@ fn draw_candles(
                 Vector2::new(x, coords.end_pos.y),
             ),
         }
+    }
+}
+
+fn draw_frames_m1(
+    d: &mut RaylibDrawHandle,
+    date: NaiveDateTime,
+    hour: &mut u32,
+    position: Vector2,
+) {
+    let minute = date.minute();
+    let offset = match minute {
+        0..=9 => 12.0,
+        10..=19 => 14.0,
+        _ => 12.0,
+    };
+
+    if minute % 2 == 0 {
+        d.draw_text_ex(
+            d.get_font_default(),
+            &format!("{:02}", minute),
+            Vector2::new(position.x + offset, position.y + 8.0),
+            10.0,
+            1.0,
+            Color::BLACK,
+        );
+    }
+
+    let current_hour = date.hour();
+    if current_hour != *hour && current_hour != 6 {
+        *hour = current_hour;
+
+        let offset = match current_hour {
+            0..=9 => 12.0,
+            10..=19 => 14.0,
+            _ => 12.0,
+        };
+        d.draw_text_ex(
+            d.get_font_default(),
+            &format!("{:02}", current_hour),
+            Vector2::new(position.x + offset, position.y + 20.0),
+            10.0,
+            1.0,
+            Color::BLACK,
+        );
     }
 }
 

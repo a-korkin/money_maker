@@ -83,6 +83,25 @@ pub async fn get_candles(
     frame: &Frame,
 ) -> Vec<Candle> {
     let sql = match frame {
+        Frame::M1 => {
+            r#"
+    select 
+        c.open::float4 as open, 
+        c.close::float4 as close, 
+        c.high::float4 as high, 
+        c.low::float4 as low, 
+        c.value::float4 as value, 
+        c.volume::float4 as volume, 
+        c.begin_t as begin, c.end_t as end
+    from public.candles as c
+    inner join public.securities as s on s.id = c.security_id
+    where s.code = $1
+        and c.begin_t >= $2
+        and c.end_t <= $3
+    order by c.begin_t
+    limit $4
+        "#
+        }
         Frame::H1 => {
             r#"
     select a.open, a.close, a.high, a.low, a.value, a.volume, a.begin, a.end

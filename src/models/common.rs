@@ -28,6 +28,7 @@ impl Into<String> for SecuritiesStr {
 }
 
 pub enum Frame {
+    M1,
     H1,
     D1,
 }
@@ -37,6 +38,7 @@ impl From<&str> for Frame {
         match value {
             "h1" => Self::H1,
             "d1" => Self::D1,
+            "m1" => Self::M1,
             _ => unimplemented!("from {} to [Frame] not implemented", value),
         }
     }
@@ -45,6 +47,7 @@ impl From<&str> for Frame {
 impl ToString for Frame {
     fn to_string(&self) -> String {
         match self {
+            Frame::M1 => String::from("m1"),
             Frame::H1 => String::from("h1"),
             Frame::D1 => String::from("d1"),
         }
