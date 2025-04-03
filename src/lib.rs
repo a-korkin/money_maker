@@ -37,13 +37,22 @@ struct Args {
     /// Adding to DB
     #[arg(short, long)]
     add: bool,
+
+    /// Run terminal
+    #[arg(short, long)]
+    terminal: bool,
 }
 
 pub async fn run() {
     logger::init().expect("failed to init logging");
-    let pool = pg::init_db().await;
 
     let args = Args::parse();
+    if args.terminal {
+        run_terminal().await;
+        return;
+    }
+
+    let pool = pg::init_db().await;
 
     let securities = match args.secs.as_str() {
         "all" => pg::get_all_securities(&pool).await,
