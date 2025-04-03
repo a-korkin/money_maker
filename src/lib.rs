@@ -76,7 +76,6 @@ pub async fn run() {
 
     if args.add {
         pg::add_securities(&pool, &securities).await;
-
         insert_candles(&pool, &securities).await;
     }
 }
