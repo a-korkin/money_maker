@@ -20,7 +20,7 @@ pub async fn add_securities(pool: &PgPool, securities: &Vec<String>) {
         select unnest($1) as code
     ) as a
     left join public.securities as b on a.code = b.code
-    where b.id is null
+    where b.id is null;
         "#;
 
     let _ = sqlx::query(sql)
@@ -45,7 +45,7 @@ pub async fn add_candles(pool: &PgPool, security: &str, candles: &Vec<Candle>) -
     let sql = format!(
         r#"
     insert into public.candles(security_id, open, close, high, low, value, volume, begin_t, end_t)
-    values{}
+    values{};
         "#,
         candles_str
     );
@@ -61,7 +61,7 @@ pub async fn get_securities_str(pool: &PgPool) -> String {
     let result: SecuritiesStr = sqlx::query_as(
         r#"
     select string_agg(code, ';')::text
-    from public.securities
+    from public.securities;
         "#,
     )
     .fetch_one(pool)
@@ -74,7 +74,7 @@ pub async fn get_securities_str(pool: &PgPool) -> String {
 pub async fn get_all_securities(pool: &PgPool) -> Vec<String> {
     let result: Vec<SecuritiesStr> = sqlx::query_as(
         r#"
-    select code from public.securities
+    select code from public.securities;
         "#,
     )
     .fetch_all(pool)
@@ -112,7 +112,7 @@ pub async fn get_candles(
         and c.begin_t >= $2
         and c.end_t <= $3
     order by c.begin_t
-    limit $4
+    limit $4;
         "#
         }
         Frame::H1 => {
@@ -136,7 +136,7 @@ pub async fn get_candles(
         group by cdate, hour
     ) as a
     order by a.begin
-    limit $4
+    limit $4;
         "#
         }
         Frame::D1 => {
@@ -160,7 +160,7 @@ pub async fn get_candles(
         group by cdate
     ) as a
     order by a.begin
-    limit $4
+    limit $4;
         "#
         }
     };
@@ -188,7 +188,7 @@ pub async fn add_operation(pool: &PgPool, operation: &Operation) {
         price, commission, time_at, sum_before, sum_after, prev)
     select $1, $2, $3, s.id, $5, $6, $7, $8, $9, $10, $11
     from public.securities as s
-    where s.code = $4
+    where s.code = $4;
         "#;
 
     let _ = sqlx::query(sql)
@@ -206,4 +206,89 @@ pub async fn add_operation(pool: &PgPool, operation: &Operation) {
         .execute(pool)
         .await
         .unwrap();
+}
+
+pub async fn get_average_volume_by_year(pool: &PgPool, security: &str, year: i32) -> i32 {
+    let sql = r#"
+    select avg(c.volume)::integer
+    from public.candles as c
+    inner join public.securities as s on s.id = c.security_id
+    where to_char(c.begin_t, 'yyyy')::integer = $1
+        and c.open < c.close
+        and s.code = $2
+    group by c.security_id;
+        "#;
+
+    let result = sqlx::query_as::<_, (i32,)>(sql)
+        .bind(year)
+        .bind(security)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+
+    return result.0;
+}
+
+pub async fn get_entry_points_1(
+    pool: &PgPool,
+    security: &str,
+    date: NaiveDateTime,
+    avg: i32,
+) -> Vec<Candle> {
+    let sql = r#"
+    select 
+        c.open::float4 as open, c.close::float4 as close,
+        c.high::float4 as high, c.low::float4 as low, 
+        c.value::float4 as value, c.volume::float4 as volume, 
+        c.begin_t as begin, c.end_t as end
+    from public.candles as c 
+    inner join public.securities as s on s.id = c.security_id
+    where s.code = $1
+        and c.begin_t::date = $2
+        and c.volume > $3
+        and c.open > c.close
+    order by c.begin_t;
+        "#;
+
+    let result: Vec<Candle> = sqlx::query_as(sql)
+        .bind(security)
+        .bind(date)
+        .bind(avg)
+        .fetch_all(pool)
+        .await
+        .unwrap();
+
+    result
+}
+
+pub async fn get_exit_points_1(
+    pool: &PgPool,
+    security: &str,
+    date: NaiveDateTime,
+    profit: f32,
+) -> Vec<Candle> {
+    let sql = r#"
+    select 
+        c.open::float4 as open, c.close::float4 as close,
+        c.high::float4 as high, c.low::float4 as low, 
+        c.value::float4 as value, c.volume::float4 as volume, 
+        c.begin_t as begin, c.end_t as end
+    from public.candles as c
+    inner join public.securities as s on s.id = c.security_id
+    where s.code = $1
+        and c.begin_t > $2
+        and c.begin_t <= $2 + '10 day'::interval
+        and c.close >= $3
+    order by c.begin_t;
+        "#;
+
+    let result: Vec<Candle> = sqlx::query_as(sql)
+        .bind(security)
+        .bind(date)
+        .bind(profit)
+        .fetch_all(pool)
+        .await
+        .unwrap();
+
+    result
 }
