@@ -1,7 +1,8 @@
 use crate::models::common::{Candle, Frame, Operation, SecuritiesStr, ToSql};
 use chrono::NaiveDateTime;
 use dotenv;
-use sqlx::{postgres::PgPool, types::Uuid};
+use sqlx::postgres::PgPool;
+use sqlx::types::Uuid;
 
 pub async fn init_db() -> PgPool {
     let db_url = dotenv::var("DATABASE_URL").expect("failed to DATABASE_URL");
@@ -177,11 +178,11 @@ pub async fn get_candles(
     result
 }
 
-pub async fn add_operation(pool: &PgPool, operation: &Operation) {
-    let prev_uuid = match &operation.prev {
-        Some(a) => Some(a.id),
-        _ => None,
-    };
+pub async fn add_operation(pool: &PgPool, operation: &Operation, prev_uuid: Option<Uuid>) {
+    // let prev_uuid = match &operation.prev {
+    //     Some(a) => Some(a.id),
+    //     _ => None,
+    // };
     let sql = r#"
     insert into public.operations(
         id, attempt, operation_type, security_id, count,

@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use chrono::{Duration, NaiveDateTime};
 use serde::Deserialize;
 use sqlx;
 use sqlx::types::Uuid;
@@ -140,5 +140,4 @@ pub struct Operation {
     pub time_at: NaiveDateTime,
     pub sum_before: f32,
     pub sum_after: f32,
-    pub prev: Option<Box<Operation>>,
 }
