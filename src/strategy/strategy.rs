@@ -35,28 +35,41 @@ pub async fn run_strategy(_pool: &PgPool) {
         .unwrap()
         .and_hms_opt(0, 0, 0)
         .unwrap();
+    let end = begin + Duration::from_secs(60 * 60 * 24 * 7);
     let _balance: f32 = 100_000.0;
     let _commission: f32 = 0.04;
 
-    for d in DateRange(begin, begin + Duration::from_secs(60 * 60 * 24)) {
-        println!("date: {d}");
+    let mut current = begin;
+    while current <= end {
+        println!("current: {}", current);
+        current += Duration::from_secs(60 * 60 * 12);
     }
+
+    // for d in DateRange(begin, begin + Duration::from_secs(60 * 60 * 24)) {
+    //     println!("date: {d}");
+    // }
 
     // pub struct DateRange(pub DateTime<Utc>, pub DateTime<Utc>);
     // st_1(pool, "OZON", date).await;
 }
 
-pub async fn st_1(pool: &PgPool, security: &str, begin: NaiveDateTime) {
+pub async fn st_1(pool: &PgPool, security: &str, begin: NaiveDateTime) -> bool {
     // находим средний объём торгов за год
     let avg = pg::get_average_volume_by_year(pool, security, begin.year()).await;
 
     // находим точку входа: volume > avg && open > close
     let entry_points = pg::get_entry_points_1(pool, security, begin, avg).await;
-    let entry_point = entry_points.first().unwrap();
-
-    // выходим close >= 0.5%
-    let profit: f32 = (entry_point.close / 100.0) * 0.5 + entry_point.close;
-    let exit_points = pg::get_exit_points_1(pool, security, entry_point.end, profit).await;
-    let exit_point = exit_points.first().unwrap();
-    println!("start: {} end: {}", entry_point.close, exit_point.close);
+    if let Some(entry_point) = entry_points.first() {
+        // выходим close >= 0.5%
+        let profit: f32 = (entry_point.close / 100.0) * 0.5 + entry_point.close;
+        let exit_points = pg::get_exit_points_1(pool, security, entry_point.end, profit).await;
+        if let Some(exit_point) = exit_points.first() {
+            println!("start: {} end: {}", entry_point.close, exit_point.close);
+            return true;
+        } else {
+            return false;
+        }
+    } else {
+        return false;
+    }
 }
