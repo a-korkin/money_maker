@@ -8,7 +8,7 @@ use uuid::Uuid;
 pub async fn run_strategy(pool: &PgPool) {
     let begin = NaiveDate::from_ymd_opt(2023, 1, 12)
         .unwrap()
-        .and_hms_opt(7, 0, 0)
+        .and_hms_opt(10, 0, 0)
         .unwrap();
     let end = begin + Duration::from_secs(60 * 60 * 24 * 7);
     let mut balance: f32 = 100_000.0;
@@ -17,14 +17,17 @@ pub async fn run_strategy(pool: &PgPool) {
     let duration = Duration::from_secs(60);
     let mut current = begin - duration;
     let attempt = Uuid::new_v4();
+    let mut purchased: i32 = 0;
+    let mut profit: f32 = 0.0;
 
     // находим средний объём торгов за год
     let avg = pg::get_average_volume_by_year(pool, security, begin.year()).await;
+    println!("avg: {avg}");
 
-    let mut prev_op: Option<Uuid> = None;
+    let mut last_operation: Option<Uuid> = None;
     while current <= end {
         current += duration;
-        prev_op = st_1(
+        last_operation = st_1(
             pool,
             &security,
             current,
@@ -32,7 +35,9 @@ pub async fn run_strategy(pool: &PgPool) {
             &commission,
             &mut balance,
             avg,
-            prev_op,
+            last_operation,
+            &mut purchased,
+            &mut profit,
         )
         .await;
     }
@@ -41,44 +46,60 @@ pub async fn run_strategy(pool: &PgPool) {
 async fn st_1(
     pool: &PgPool,
     security: &str,
-    begin: NaiveDateTime,
+    date: NaiveDateTime,
     attempt: &Uuid,
     commission: &f32,
     balance: &mut f32,
     avg: i32,
     prev: Option<Uuid>,
+    purchased: &mut i32,
+    profit: &mut f32,
 ) -> Option<Uuid> {
+    if *purchased > 0 {
+        // выходим close >= 0.5%
+        let exit_points = pg::get_exit_points_1(pool, security, date, *profit).await;
+        if let Some(exit_point) = exit_points.first() {
+            let op_id = create_operation(
+                pool, attempt, "sale", security, *purchased, &date, commission, balance, prev,
+                exit_point,
+            )
+            .await;
+            *purchased = 0;
+            println!("profit: {profit}, balance: {balance}");
+            return Some(op_id);
+        }
+        return prev;
+    }
     // находим точку входа: volume > avg && open > close
-    let entry_points = pg::get_entry_points_1(pool, security, begin, avg).await;
-    // let prev: Option<Operation> = None;
+    let entry_points = pg::get_entry_points_1(pool, security, date, avg).await;
+    println!("time: {}, count ep: {}", date, entry_points.len());
+
     if let Some(entry_point) = entry_points.first() {
         let count = f32::floor(*balance / entry_point.close) as i32;
 
+        if count == 0 {
+            return prev;
+        }
         let op_id = create_operation(
             pool,
             attempt,
             "purchase",
             security,
             count,
-            &begin,
+            &date,
             commission,
             balance,
             prev,
             &entry_point,
         )
         .await;
+
+        *purchased += count;
+        // профит в 0.5%
+        *profit = (entry_point.close / 100.0) * 0.5 + entry_point.close;
         return Some(op_id);
     }
-    // выходим close >= 0.5%
-    // let profit: f32 = (entry_point.close / 100.0) * 0.5 + entry_point.close;
-    // let exit_points = pg::get_exit_points_1(pool, security, entry_point.end, profit).await;
-    // if let Some(exit_point) = exit_points.first() {
-    //     create_operation(
-    //         pool, attempt, "sale", security, count, &begin, commission, balance, None, exit_point,
-    //     )
-    //     .await;
-    // }
-    return None;
+    return prev;
 }
 
 async fn create_operation(
@@ -99,6 +120,7 @@ async fn create_operation(
         OperationType::Purchase => *balance - (count as f32 * candle.close),
         OperationType::Sale => *balance + (count as f32 * candle.close),
     };
+    *balance = sum_after;
     let operation = Operation {
         id,
         attempt: *attempt,

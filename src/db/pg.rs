@@ -245,7 +245,7 @@ pub async fn get_entry_points_1(
     from public.candles as c 
     inner join public.securities as s on s.id = c.security_id
     where s.code = $1
-        and c.begin_t::date = $2
+        and c.begin_t = $2
         and c.volume > $3
         and c.open > c.close
     order by c.begin_t;
