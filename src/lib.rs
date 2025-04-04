@@ -54,7 +54,7 @@ pub async fn run() {
         return;
     }
 
-    strategy::strategy::create_operation(&pool).await;
+    strategy::strategy::run_strategy(&pool).await;
     return;
 
     let securities = match args.secs.as_str() {
@@ -66,21 +66,17 @@ pub async fn run() {
             .collect::<Vec<String>>(),
     };
 
-    let start: DateTime<Utc> = dotenv::var("PERIOD_START")
+    let start: NaiveDateTime = dotenv::var("PERIOD_START")
         .expect("failed to get PERIOD_START")
         .parse::<NaiveDate>()
         .expect("failed parse to DateTime")
-        .and_time(NaiveTime::default())
-        .and_local_timezone(Utc)
-        .unwrap();
+        .and_time(NaiveTime::default());
 
-    let end: DateTime<Utc> = dotenv::var("PERIOD_END")
+    let end: NaiveDateTime = dotenv::var("PERIOD_END")
         .expect("failed to get PERIOD_END")
         .parse::<NaiveDate>()
         .expect("failed parse to DateTime")
-        .and_time(NaiveTime::default())
-        .and_local_timezone(Utc)
-        .unwrap();
+        .and_time(NaiveTime::default());
 
     if args.download {
         fetch_data(&securities, start, end).await;
@@ -96,7 +92,7 @@ pub async fn run_terminal(pool: &PgPool) {
     terminal::terminal::run_terminal(pool).await;
 }
 
-pub async fn fetch_data(securities: &Vec<String>, start: DateTime<Utc>, end: DateTime<Utc>) {
+pub async fn fetch_data(securities: &Vec<String>, start: NaiveDateTime, end: NaiveDateTime) {
     let begin = Local::now().time();
     let date_range = DateRange(start, end);
     for date in date_range {
