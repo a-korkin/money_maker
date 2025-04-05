@@ -10,7 +10,7 @@ pub async fn run_strategy(pool: &PgPool) {
         .unwrap()
         .and_hms_opt(10, 0, 0)
         .unwrap();
-    let end = begin + Duration::from_secs(60 * 60 * 24 * 7);
+    let end = begin + Duration::from_secs(60 * 60 * 3);
     let mut balance: f32 = 100_000.0;
     let commission: f32 = 0.04;
     let security = "OZON";
@@ -22,7 +22,6 @@ pub async fn run_strategy(pool: &PgPool) {
 
     // находим средний объём торгов за год
     let avg = pg::get_average_volume_by_year(pool, security, begin.year()).await;
-    println!("avg: {avg}");
 
     let mut last_operation: Option<Uuid> = None;
     while current <= end {
@@ -59,8 +58,17 @@ async fn st_1(
         // выходим close >= 0.5%
         let exit_points = pg::get_exit_points_1(pool, security, date, *profit).await;
         if let Some(exit_point) = exit_points.first() {
+            let commission: f32 = ((*purchased as f32 * exit_point.close) / 100.0) * *commission;
             let op_id = create_operation(
-                pool, attempt, "sale", security, *purchased, &date, commission, balance, prev,
+                pool,
+                attempt,
+                "sold",
+                security,
+                *purchased,
+                &date,
+                &commission,
+                balance,
+                prev,
                 exit_point,
             )
             .await;
@@ -75,7 +83,11 @@ async fn st_1(
     println!("time: {}, count ep: {}", date, entry_points.len());
 
     if let Some(entry_point) = entry_points.first() {
-        let count = f32::floor(*balance / entry_point.close) as i32;
+        let mut count = f32::floor(*balance / entry_point.close) as i32;
+        let commission: f32 = ((count as f32 * entry_point.close) / 100.0) * *commission;
+        while (count as f32 * entry_point.close) + commission > *balance {
+            count -= 1;
+        }
 
         if count == 0 {
             return prev;
@@ -83,11 +95,11 @@ async fn st_1(
         let op_id = create_operation(
             pool,
             attempt,
-            "purchase",
+            "buy",
             security,
             count,
             &date,
-            commission,
+            &commission,
             balance,
             prev,
             &entry_point,
@@ -116,10 +128,11 @@ async fn create_operation(
 ) -> Uuid {
     let id = Uuid::new_v4();
     let operation_type = OperationType::from(op_type);
-    let sum_after: f32 = match operation_type {
+    let mut sum_after: f32 = match operation_type {
         OperationType::Buy => *balance - (count as f32 * candle.close),
         OperationType::Sold => *balance + (count as f32 * candle.close),
     };
+    sum_after = sum_after - *commission;
     let operation = Operation {
         id,
         attempt: *attempt,
