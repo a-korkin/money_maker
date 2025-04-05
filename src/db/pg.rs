@@ -179,10 +179,6 @@ pub async fn get_candles(
 }
 
 pub async fn add_operation(pool: &PgPool, operation: &Operation, prev_uuid: Option<Uuid>) {
-    // let prev_uuid = match &operation.prev {
-    //     Some(a) => Some(a.id),
-    //     _ => None,
-    // };
     let sql = r#"
     insert into public.operations(
         id, attempt, operation_type, security_id, count,
@@ -228,68 +224,4 @@ pub async fn get_average_volume_by_year(pool: &PgPool, security: &str, year: i32
         .unwrap();
 
     return result.0;
-}
-
-pub async fn get_entry_points_1(
-    pool: &PgPool,
-    security: &str,
-    date: NaiveDateTime,
-    avg: i32,
-) -> Vec<Candle> {
-    let sql = r#"
-    select 
-        c.open::float4 as open, c.close::float4 as close,
-        c.high::float4 as high, c.low::float4 as low, 
-        c.value::float4 as value, c.volume::float4 as volume, 
-        c.begin_t as begin, c.end_t as end
-    from public.candles as c 
-    inner join public.securities as s on s.id = c.security_id
-    where s.code = $1
-        and c.begin_t = $2
-        and c.volume > $3
-        and c.open > c.close
-    order by c.begin_t;
-        "#;
-
-    let result: Vec<Candle> = sqlx::query_as(sql)
-        .bind(security)
-        .bind(date)
-        .bind(avg)
-        .fetch_all(pool)
-        .await
-        .unwrap();
-
-    result
-}
-
-pub async fn get_exit_points_1(
-    pool: &PgPool,
-    security: &str,
-    date: NaiveDateTime,
-    profit: f32,
-) -> Vec<Candle> {
-    let sql = r#"
-    select 
-        c.open::float4 as open, c.close::float4 as close,
-        c.high::float4 as high, c.low::float4 as low, 
-        c.value::float4 as value, c.volume::float4 as volume, 
-        c.begin_t as begin, c.end_t as end
-    from public.candles as c
-    inner join public.securities as s on s.id = c.security_id
-    where s.code = $1
-        and c.begin_t > $2
-        and c.begin_t <= $2 + '10 day'::interval
-        and c.close >= $3
-    order by c.begin_t;
-        "#;
-
-    let result: Vec<Candle> = sqlx::query_as(sql)
-        .bind(security)
-        .bind(date)
-        .bind(profit)
-        .fetch_all(pool)
-        .await
-        .unwrap();
-
-    result
 }

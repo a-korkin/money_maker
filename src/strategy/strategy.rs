@@ -1,35 +1,33 @@
 use crate::db::pg;
-use crate::models::common::{Candle, Operation, OperationType};
-use chrono::{Datelike, NaiveDate, NaiveDateTime};
+use crate::models::common::{Candle, Frame, Operation, OperationType};
+use chrono::{Datelike, NaiveDate};
 use sqlx::postgres::PgPool;
 use std::time::Duration;
 use uuid::Uuid;
 
 pub async fn run_strategy(pool: &PgPool) {
-    let begin = NaiveDate::from_ymd_opt(2023, 1, 12)
+    let begin = NaiveDate::from_ymd_opt(2023, 1, 1)
         .unwrap()
         .and_hms_opt(10, 0, 0)
         .unwrap();
-    let end = begin + Duration::from_secs(60 * 60 * 3);
+    let end = begin + Duration::from_secs(60 * 60 * 24 * 31);
     let mut balance: f32 = 100_000.0;
     let commission: f32 = 0.04;
     let security = "OZON";
-    let duration = Duration::from_secs(60);
-    let mut current = begin - duration;
     let attempt = Uuid::new_v4();
     let mut purchased: i32 = 0;
     let mut profit: f32 = 0.0;
 
     // находим средний объём торгов за год
     let avg = pg::get_average_volume_by_year(pool, security, begin.year()).await;
-
     let mut last_operation: Option<Uuid> = None;
-    while current <= end {
-        current += duration;
+    let candles = pg::get_candles(pool, security, begin, end, 100_000, &Frame::M1).await;
+
+    for candle in candles {
         last_operation = st_1(
             pool,
             &security,
-            current,
+            &candle,
             &attempt,
             &commission,
             &mut balance,
@@ -45,7 +43,7 @@ pub async fn run_strategy(pool: &PgPool) {
 async fn st_1(
     pool: &PgPool,
     security: &str,
-    date: NaiveDateTime,
+    candle: &Candle,
     attempt: &Uuid,
     commission: &f32,
     balance: &mut f32,
@@ -54,38 +52,33 @@ async fn st_1(
     purchased: &mut i32,
     profit: &mut f32,
 ) -> Option<Uuid> {
+    // println!("period: {}", candle.begin);
     if *purchased > 0 {
         // выходим close >= 0.5%
-        let exit_points = pg::get_exit_points_1(pool, security, date, *profit).await;
-        if let Some(exit_point) = exit_points.first() {
-            let commission: f32 = ((*purchased as f32 * exit_point.close) / 100.0) * *commission;
+        if candle.close >= *profit {
+            let commission: f32 = ((*purchased as f32 * candle.close) / 100.0) * *commission;
             let op_id = create_operation(
                 pool,
                 attempt,
                 "sold",
                 security,
                 *purchased,
-                &date,
                 &commission,
                 balance,
                 prev,
-                exit_point,
+                candle,
             )
             .await;
             *purchased = 0;
-            println!("profit: {profit}, balance: {balance}");
             return Some(op_id);
         }
         return prev;
     }
     // находим точку входа: volume > avg && open > close
-    let entry_points = pg::get_entry_points_1(pool, security, date, avg).await;
-    println!("time: {}, count ep: {}", date, entry_points.len());
-
-    if let Some(entry_point) = entry_points.first() {
-        let mut count = f32::floor(*balance / entry_point.close) as i32;
-        let commission: f32 = ((count as f32 * entry_point.close) / 100.0) * *commission;
-        while (count as f32 * entry_point.close) + commission > *balance {
+    if candle.volume as i32 > avg && candle.open > candle.close {
+        let mut count = f32::floor(*balance / candle.close) as i32;
+        let commission: f32 = ((count as f32 * candle.close) / 100.0) * *commission;
+        while (count as f32 * candle.close) + commission > *balance {
             count -= 1;
         }
 
@@ -98,17 +91,16 @@ async fn st_1(
             "buy",
             security,
             count,
-            &date,
             &commission,
             balance,
             prev,
-            &entry_point,
+            candle,
         )
         .await;
 
         *purchased += count;
         // профит в 0.5%
-        *profit = (entry_point.close / 100.0) * 0.5 + entry_point.close;
+        *profit = (candle.close / 100.0) * 0.5 + candle.close;
         return Some(op_id);
     }
     return prev;
@@ -120,7 +112,6 @@ async fn create_operation(
     op_type: &str,
     security: &str,
     count: i32,
-    time_at: &NaiveDateTime,
     commission: &f32,
     balance: &mut f32,
     prev: Option<Uuid>,
@@ -141,7 +132,7 @@ async fn create_operation(
         count,
         price: candle.close,
         commission: *commission,
-        time_at: *time_at,
+        time_at: candle.begin,
         sum_before: *balance,
         sum_after,
     };
