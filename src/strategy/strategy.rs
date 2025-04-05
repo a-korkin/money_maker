@@ -117,10 +117,9 @@ async fn create_operation(
     let id = Uuid::new_v4();
     let operation_type = OperationType::from(op_type);
     let sum_after: f32 = match operation_type {
-        OperationType::Purchase => *balance - (count as f32 * candle.close),
-        OperationType::Sale => *balance + (count as f32 * candle.close),
+        OperationType::Buy => *balance - (count as f32 * candle.close),
+        OperationType::Sold => *balance + (count as f32 * candle.close),
     };
-    *balance = sum_after;
     let operation = Operation {
         id,
         attempt: *attempt,
@@ -133,6 +132,7 @@ async fn create_operation(
         sum_before: *balance,
         sum_after,
     };
+    *balance = sum_after;
     pg::add_operation(pool, &operation, prev).await;
     return operation.id;
 }

@@ -105,15 +105,15 @@ impl Iterator for DateRange {
 }
 
 pub enum OperationType {
-    Purchase,
-    Sale,
+    Buy,
+    Sold,
 }
 
 impl From<&str> for OperationType {
     fn from(value: &str) -> Self {
         match value {
-            "purchase" => Self::Purchase,
-            "sale" => Self::Sale,
+            "buy" => Self::Buy,
+            "sold" => Self::Sold,
             _ => unimplemented!("operation type: {} not implemented", value),
         }
     }
@@ -122,8 +122,8 @@ impl From<&str> for OperationType {
 impl ToString for OperationType {
     fn to_string(&self) -> String {
         match self {
-            OperationType::Purchase => String::from("purchase"),
-            OperationType::Sale => String::from("sale"),
+            OperationType::Buy => String::from("buy"),
+            OperationType::Sold => String::from("sold"),
         }
     }
 }
