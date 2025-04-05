@@ -7,6 +7,7 @@ create table if not exists operations
     count integer not null default 0,
     price decimal not null default 0,
     commission decimal not null default 0,
+    profit decimal not null default 0,
     time_at timestamp without time zone not null default now(),
     sum_before decimal not null default 0,
     sum_after decimal not null default 0,

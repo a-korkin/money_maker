@@ -182,8 +182,8 @@ pub async fn add_operation(pool: &PgPool, operation: &Operation, prev_uuid: Opti
     let sql = r#"
     insert into public.operations(
         id, attempt, operation_type, security_id, count,
-        price, commission, time_at, sum_before, sum_after, prev)
-    select $1, $2, $3, s.id, $5, $6, $7, $8, $9, $10, $11
+        price, commission, profit, time_at, sum_before, sum_after, prev)
+    select $1, $2, $3, s.id, $5, $6, $7, $8, $9, $10, $11, $12
     from public.securities as s
     where s.code = $4;
         "#;
@@ -196,6 +196,7 @@ pub async fn add_operation(pool: &PgPool, operation: &Operation, prev_uuid: Opti
         .bind(operation.count)
         .bind(operation.price)
         .bind(operation.commission)
+        .bind(operation.profit)
         .bind(operation.time_at)
         .bind(operation.sum_before)
         .bind(operation.sum_after)
