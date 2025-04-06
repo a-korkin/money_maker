@@ -1,4 +1,4 @@
-use crate::models::common::{Candle, Frame, Operation, SecuritiesStr, ToSql};
+use crate::models::common::{Attempt, Candle, Frame, Operation, SecuritiesStr, ToSql};
 use chrono::NaiveDateTime;
 use dotenv;
 use sqlx::postgres::PgPool;
@@ -178,12 +178,26 @@ pub async fn get_candles(
     result
 }
 
+pub async fn add_attempt(pool: &PgPool, attempt: &Attempt) {
+    let sql = r#"
+    insert into public.attempts(id, profit)
+    values($1, $2);
+        "#;
+
+    let _ = sqlx::query(sql)
+        .bind(attempt.id)
+        .bind(attempt.profit)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
 pub async fn add_operation(pool: &PgPool, operation: &Operation, prev_uuid: Option<Uuid>) {
     let sql = r#"
     insert into public.operations(
-        id, attempt, operation_type, security_id, count,
-        price, commission, profit, time_at, sum_before, sum_after, prev)
-    select $1, $2, $3, s.id, $5, $6, $7, $8, $9, $10, $11, $12
+        id, attempt_id, operation_type, security_id, count,
+        price, commission, time_at, sum_before, sum_after, prev)
+    select $1, $2, $3, s.id, $5, $6, $7, $8, $9, $10, $11
     from public.securities as s
     where s.code = $4;
         "#;
@@ -196,7 +210,6 @@ pub async fn add_operation(pool: &PgPool, operation: &Operation, prev_uuid: Opti
         .bind(operation.count)
         .bind(operation.price)
         .bind(operation.commission)
-        .bind(operation.profit)
         .bind(operation.time_at)
         .bind(operation.sum_before)
         .bind(operation.sum_after)

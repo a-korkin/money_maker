@@ -1,8 +1,8 @@
 use crate::db::pg;
-use crate::models::common::{Candle, Frame, Operation, OperationType};
+use crate::models::common::{Attempt, Candle, Frame, Operation, OperationType};
 use chrono::{Datelike, NaiveDate};
 use sqlx::postgres::PgPool;
-use std::time::Duration;
+// use std::time::Duration;
 use uuid::Uuid;
 
 pub async fn run_strategy(pool: &PgPool) {
@@ -18,15 +18,18 @@ pub async fn run_strategy(pool: &PgPool) {
     let mut balance: f32 = 100_000.0;
     let commission: f32 = 0.04;
     let security = "OZON";
-    let attempt = Uuid::new_v4();
     let mut purchased: i32 = 0;
     let mut profit: f32 = 0.0;
-    let profit_percent: f32 = 0.5;
 
     // находим средний объём торгов за год
     let avg = pg::get_average_volume_by_year(pool, security, begin.year()).await;
     let mut last_operation: Option<Uuid> = None;
     let candles = pg::get_candles(pool, security, begin, end, 200_000, &Frame::M1).await;
+    let attempt = Attempt {
+        id: Uuid::new_v4(),
+        profit: 0.5,
+    };
+    pg::add_attempt(pool, &attempt).await;
 
     for candle in candles {
         last_operation = st_1(
@@ -40,7 +43,6 @@ pub async fn run_strategy(pool: &PgPool) {
             last_operation,
             &mut purchased,
             &mut profit,
-            &profit_percent,
         )
         .await;
     }
@@ -50,14 +52,13 @@ async fn st_1(
     pool: &PgPool,
     security: &str,
     candle: &Candle,
-    attempt: &Uuid,
+    attempt: &Attempt,
     commission: &f32,
     balance: &mut f32,
     avg: i32,
     prev: Option<Uuid>,
     purchased: &mut i32,
     profit: &mut f32,
-    profit_percent: &f32,
 ) -> Option<Uuid> {
     // println!("period: {}", candle.begin);
     if *purchased > 0 {
@@ -71,7 +72,6 @@ async fn st_1(
                 security,
                 *purchased,
                 &commission,
-                profit_percent,
                 balance,
                 prev,
                 candle,
@@ -100,7 +100,6 @@ async fn st_1(
             security,
             count,
             &commission,
-            profit_percent,
             balance,
             prev,
             candle,
@@ -109,7 +108,7 @@ async fn st_1(
 
         *purchased += count;
         // профит в 0.5%
-        *profit = (candle.close / 100.0) * *profit_percent + candle.close;
+        *profit = (candle.close / 100.0) * attempt.profit + candle.close;
         return Some(op_id);
     }
     return prev;
@@ -117,12 +116,11 @@ async fn st_1(
 
 async fn create_operation(
     pool: &PgPool,
-    attempt: &Uuid,
+    attempt: &Attempt,
     op_type: &str,
     security: &str,
     count: i32,
     commission: &f32,
-    profit_percent: &f32,
     balance: &mut f32,
     prev: Option<Uuid>,
     candle: &Candle,
@@ -136,13 +134,12 @@ async fn create_operation(
     sum_after = sum_after - *commission;
     let operation = Operation {
         id,
-        attempt: *attempt,
+        attempt: attempt.id,
         operation_type,
         security: security.to_string(),
         count,
         price: candle.close,
         commission: *commission,
-        profit: *profit_percent,
         time_at: candle.begin,
         sum_before: *balance,
         sum_after,

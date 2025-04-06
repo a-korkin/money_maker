@@ -128,7 +128,6 @@ impl ToString for OperationType {
     }
 }
 
-#[allow(dead_code)]
 pub struct Operation {
     pub id: Uuid,
     pub attempt: Uuid,
@@ -137,8 +136,12 @@ pub struct Operation {
     pub count: i32,
     pub price: f32,
     pub commission: f32,
-    pub profit: f32,
     pub time_at: NaiveDateTime,
     pub sum_before: f32,
     pub sum_after: f32,
+}
+
+pub struct Attempt {
+    pub id: Uuid,
+    pub profit: f32,
 }
