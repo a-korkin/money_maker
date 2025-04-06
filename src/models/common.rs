@@ -104,6 +104,11 @@ impl Iterator for DateRange {
     }
 }
 
+pub enum AvgPeriod {
+    Year,
+    Month,
+}
+
 pub enum OperationType {
     Buy,
     Sold,

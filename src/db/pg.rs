@@ -1,4 +1,4 @@
-use crate::models::common::{Attempt, Candle, Frame, Operation, SecuritiesStr, ToSql};
+use crate::models::common::{Attempt, AvgPeriod, Candle, Frame, Operation, SecuritiesStr, ToSql};
 use chrono::NaiveDateTime;
 use dotenv;
 use sqlx::postgres::PgPool;
@@ -180,8 +180,8 @@ pub async fn get_candles(
 
 pub async fn add_attempt(pool: &PgPool, attempt: &Attempt) {
     let sql = r#"
-    insert into public.attempts(id, profit, commission)
-    values($1, $2, $3);
+    insert into public.attempts(id, created_at, profit, commission)
+    values($1, now(), $2, $3);
         "#;
 
     let _ = sqlx::query(sql)
@@ -220,8 +220,15 @@ pub async fn add_operation(pool: &PgPool, operation: &Operation, prev_uuid: Opti
         .unwrap();
 }
 
-pub async fn get_average_volume_by_year(pool: &PgPool, security: &str, year: i32) -> i32 {
-    let sql = r#"
+pub async fn get_average_volume(
+    pool: &PgPool,
+    security: &str,
+    period: AvgPeriod,
+    time_interval: i32,
+) -> i32 {
+    let sql = match period {
+        AvgPeriod::Year => {
+            r#"
     select avg(c.volume)::integer
     from public.candles as c
     inner join public.securities as s on s.id = c.security_id
@@ -229,10 +236,23 @@ pub async fn get_average_volume_by_year(pool: &PgPool, security: &str, year: i32
         and c.open < c.close
         and s.code = $2
     group by c.security_id;
-        "#;
+        "#
+        }
+        AvgPeriod::Month => {
+            r#"
+    select avg(c.volume)::integer, to_char(c.begin_t, 'yyyyMM')::integer as per
+    from public.candles as c
+    inner join public.securities as s on s.id = c.security_id
+    where to_char(c.begin_t - '1 mons'::interval, 'yyyyMM')::integer = $1
+        and c.open < c.close
+        and s.code = $2
+    group by c.security_id, per;
+        "#
+        }
+    };
 
     let result = sqlx::query_as::<_, (i32,)>(sql)
-        .bind(year)
+        .bind(time_interval)
         .bind(security)
         .fetch_one(pool)
         .await

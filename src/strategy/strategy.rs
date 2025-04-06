@@ -1,5 +1,5 @@
 use crate::db::pg;
-use crate::models::common::{Attempt, Candle, Frame, Operation, OperationType};
+use crate::models::common::{Attempt, AvgPeriod, Candle, Frame, Operation, OperationType};
 use chrono::{Datelike, NaiveDate};
 use sqlx::postgres::PgPool;
 // use std::time::Duration;
@@ -18,25 +18,43 @@ pub async fn run_strategy(pool: &PgPool) {
     // let mut wallet = Wallet { balance: 100_000.0 };
 
     let packets: Vec<Packet> = vec![
-        Packet::new("LKOH", 1, 100_000.0),
         Packet::new("OZON", 1, 100_000.0),
-        Packet::new("SBER", 10, 100_000.0),
+        // Packet::new("LKOH", 1, 100_000.0),
+        // Packet::new("SBER", 10, 100_000.0),
     ];
+
+    let mut period = begin.format("%Y%m").to_string().parse::<i32>().unwrap();
 
     for mut packet in packets {
         // находим средний объём торгов за год
-        let avg = pg::get_average_volume_by_year(pool, &packet.security, begin.year()).await;
+        // let avg =
+        //     pg::get_average_volume(pool, &packet.security, AvgPeriod::Year, begin.year()).await;
+
+        // находим средний объём торгов за текущий месяц
+        let mut avg =
+            pg::get_average_volume(pool, &packet.security, AvgPeriod::Month, period).await;
         let mut last_operation: Option<Uuid> = None;
         let candles =
             pg::get_candles(pool, &packet.security, begin, end, 200_000, &Frame::M1).await;
         let attempt = Attempt {
             id: Uuid::new_v4(),
-            profit: 0.7, // профит, который необходим
+            profit: 2.0, // профит, который необходим
             commission: 0.04,
         };
         pg::add_attempt(pool, &attempt).await;
 
         for candle in &candles {
+            let current_period = candle
+                .begin
+                .format("%Y%m")
+                .to_string()
+                .parse::<i32>()
+                .unwrap();
+            if period != current_period {
+                period = current_period;
+                avg =
+                    pg::get_average_volume(pool, &packet.security, AvgPeriod::Month, period).await;
+            }
             last_operation = st_1(
                 pool,
                 &mut packet,
