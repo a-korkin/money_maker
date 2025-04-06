@@ -15,8 +15,8 @@ pub async fn run_strategy(pool: &PgPool) {
         .unwrap()
         .and_hms_opt(10, 0, 0)
         .unwrap();
-    let mut balance: f32 = 100_000.0;
-    let commission: f32 = 0.04;
+    // let mut balance: f32 = 100_000.0;
+    let mut wallet = Wallet { balance: 100_000.0 };
     let security = "OZON";
     let mut purchased: i32 = 0;
     let mut profit: f32 = 0.0;
@@ -27,7 +27,8 @@ pub async fn run_strategy(pool: &PgPool) {
     let candles = pg::get_candles(pool, security, begin, end, 200_000, &Frame::M1).await;
     let attempt = Attempt {
         id: Uuid::new_v4(),
-        profit: 0.5,
+        profit: 0.5, // профит, который необходим
+        commission: 0.04,
     };
     pg::add_attempt(pool, &attempt).await;
 
@@ -37,8 +38,7 @@ pub async fn run_strategy(pool: &PgPool) {
             &security,
             &candle,
             &attempt,
-            &commission,
-            &mut balance,
+            &mut wallet,
             avg,
             last_operation,
             &mut purchased,
@@ -48,13 +48,16 @@ pub async fn run_strategy(pool: &PgPool) {
     }
 }
 
+struct Wallet {
+    balance: f32,
+}
+
 async fn st_1(
     pool: &PgPool,
     security: &str,
     candle: &Candle,
     attempt: &Attempt,
-    commission: &f32,
-    balance: &mut f32,
+    wallet: &mut Wallet,
     avg: i32,
     prev: Option<Uuid>,
     purchased: &mut i32,
@@ -64,7 +67,7 @@ async fn st_1(
     if *purchased > 0 {
         // выходим close >= 0.5%
         if candle.close >= *profit {
-            let commission: f32 = ((*purchased as f32 * candle.close) / 100.0) * *commission;
+            let commission: f32 = ((*purchased as f32 * candle.close) / 100.0) * attempt.commission;
             let op_id = create_operation(
                 pool,
                 attempt,
@@ -72,7 +75,7 @@ async fn st_1(
                 security,
                 *purchased,
                 &commission,
-                balance,
+                &mut wallet.balance,
                 prev,
                 candle,
             )
@@ -84,9 +87,9 @@ async fn st_1(
     }
     // находим точку входа: volume > avg && open > close
     if candle.volume as i32 > avg && candle.open > candle.close {
-        let mut count = f32::floor(*balance / candle.close) as i32;
-        let commission: f32 = ((count as f32 * candle.close) / 100.0) * *commission;
-        while (count as f32 * candle.close) + commission > *balance {
+        let mut count = f32::floor(wallet.balance / candle.close) as i32;
+        let commission: f32 = ((count as f32 * candle.close) / 100.0) * attempt.commission;
+        while (count as f32 * candle.close) + commission > wallet.balance {
             count -= 1;
         }
 
@@ -100,14 +103,13 @@ async fn st_1(
             security,
             count,
             &commission,
-            balance,
+            &mut wallet.balance,
             prev,
             candle,
         )
         .await;
 
         *purchased += count;
-        // профит в 0.5%
         *profit = (candle.close / 100.0) * attempt.profit + candle.close;
         return Some(op_id);
     }

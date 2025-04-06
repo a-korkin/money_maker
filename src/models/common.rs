@@ -144,4 +144,5 @@ pub struct Operation {
 pub struct Attempt {
     pub id: Uuid,
     pub profit: f32,
+    pub commission: f32,
 }

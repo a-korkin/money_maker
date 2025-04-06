@@ -180,13 +180,14 @@ pub async fn get_candles(
 
 pub async fn add_attempt(pool: &PgPool, attempt: &Attempt) {
     let sql = r#"
-    insert into public.attempts(id, profit)
-    values($1, $2);
+    insert into public.attempts(id, profit, commission)
+    values($1, $2, $3);
         "#;
 
     let _ = sqlx::query(sql)
         .bind(attempt.id)
         .bind(attempt.profit)
+        .bind(attempt.commission)
         .execute(pool)
         .await
         .unwrap();
