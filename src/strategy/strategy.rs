@@ -15,102 +15,119 @@ pub async fn run_strategy(pool: &PgPool) {
         .unwrap()
         .and_hms_opt(10, 0, 0)
         .unwrap();
-    // let mut balance: f32 = 100_000.0;
-    let mut wallet = Wallet { balance: 100_000.0 };
-    let security = "OZON";
-    let mut purchased: i32 = 0;
-    let mut profit: f32 = 0.0;
+    // let mut wallet = Wallet { balance: 100_000.0 };
 
-    // находим средний объём торгов за год
-    let avg = pg::get_average_volume_by_year(pool, security, begin.year()).await;
-    let mut last_operation: Option<Uuid> = None;
-    let candles = pg::get_candles(pool, security, begin, end, 200_000, &Frame::M1).await;
-    let attempt = Attempt {
-        id: Uuid::new_v4(),
-        profit: 0.5, // профит, который необходим
-        commission: 0.04,
-    };
-    pg::add_attempt(pool, &attempt).await;
+    let packets: Vec<Packet> = vec![
+        Packet::new("LKOH", 1, 100_000.0),
+        Packet::new("OZON", 1, 100_000.0),
+        Packet::new("SBER", 10, 100_000.0),
+    ];
 
-    for candle in candles {
-        last_operation = st_1(
-            pool,
-            &security,
-            &candle,
-            &attempt,
-            &mut wallet,
-            avg,
-            last_operation,
-            &mut purchased,
-            &mut profit,
-        )
-        .await;
+    for mut packet in packets {
+        // находим средний объём торгов за год
+        let avg = pg::get_average_volume_by_year(pool, &packet.security, begin.year()).await;
+        let mut last_operation: Option<Uuid> = None;
+        let candles =
+            pg::get_candles(pool, &packet.security, begin, end, 200_000, &Frame::M1).await;
+        let attempt = Attempt {
+            id: Uuid::new_v4(),
+            profit: 0.7, // профит, который необходим
+            commission: 0.04,
+        };
+        pg::add_attempt(pool, &attempt).await;
+
+        for candle in &candles {
+            last_operation = st_1(
+                pool,
+                &mut packet,
+                &candle,
+                &attempt, //&mut wallet,
+                avg,
+                last_operation,
+            )
+            .await;
+        }
     }
 }
 
+#[allow(dead_code)]
 struct Wallet {
     balance: f32,
 }
 
+struct Packet {
+    security: String,
+    min_count: i32,
+    purchased: i32,
+    profit: f32,
+    balance: f32,
+}
+
+impl Packet {
+    fn new(security: &str, min_count: i32, balance: f32) -> Self {
+        Self {
+            security: security.to_string(),
+            min_count,
+            purchased: 0,
+            profit: 0.0,
+            balance,
+        }
+    }
+}
+
 async fn st_1(
     pool: &PgPool,
-    security: &str,
+    packet: &mut Packet,
     candle: &Candle,
-    attempt: &Attempt,
-    wallet: &mut Wallet,
+    attempt: &Attempt, // wallet: &mut Wallet,
     avg: i32,
     prev: Option<Uuid>,
-    purchased: &mut i32,
-    profit: &mut f32,
 ) -> Option<Uuid> {
-    // println!("period: {}", candle.begin);
-    if *purchased > 0 {
+    if packet.purchased > 0 {
         // выходим close >= 0.5%
-        if candle.close >= *profit {
-            let commission: f32 = ((*purchased as f32 * candle.close) / 100.0) * attempt.commission;
+        if candle.close >= packet.profit {
+            let commission: f32 =
+                ((packet.purchased as f32 * candle.close) / 100.0) * attempt.commission;
             let op_id = create_operation(
                 pool,
                 attempt,
                 "sold",
-                security,
-                *purchased,
-                &commission,
-                &mut wallet.balance,
+                packet,
+                &commission, //&mut wallet.balance,
                 prev,
                 candle,
             )
             .await;
-            *purchased = 0;
+            packet.purchased = 0;
             return Some(op_id);
         }
         return prev;
     }
     // находим точку входа: volume > avg && open > close
     if candle.volume as i32 > avg && candle.open > candle.close {
-        let mut count = f32::floor(wallet.balance / candle.close) as i32;
+        let mut count = f32::floor(packet.balance / (candle.close)) as i32;
         let commission: f32 = ((count as f32 * candle.close) / 100.0) * attempt.commission;
-        while (count as f32 * candle.close) + commission > wallet.balance {
+        while (count as f32 * candle.close) + commission > packet.balance {
             count -= 1;
         }
+        count = (count / packet.min_count) * packet.min_count;
 
         if count == 0 {
             return prev;
         }
+        packet.purchased += count;
+        packet.profit = (candle.close / 100.0) * attempt.profit + candle.close;
         let op_id = create_operation(
             pool,
             attempt,
             "buy",
-            security,
-            count,
-            &commission,
-            &mut wallet.balance,
+            packet,
+            &commission, //&mut wallet.balance,
             prev,
             candle,
         )
         .await;
 
-        *purchased += count;
-        *profit = (candle.close / 100.0) * attempt.profit + candle.close;
         return Some(op_id);
     }
     return prev;
@@ -120,33 +137,31 @@ async fn create_operation(
     pool: &PgPool,
     attempt: &Attempt,
     op_type: &str,
-    security: &str,
-    count: i32,
-    commission: &f32,
-    balance: &mut f32,
+    packet: &mut Packet,
+    commission: &f32, //balance: &mut f32,
     prev: Option<Uuid>,
     candle: &Candle,
 ) -> Uuid {
     let id = Uuid::new_v4();
     let operation_type = OperationType::from(op_type);
     let mut sum_after: f32 = match operation_type {
-        OperationType::Buy => *balance - (count as f32 * candle.close),
-        OperationType::Sold => *balance + (count as f32 * candle.close),
+        OperationType::Buy => packet.balance - (packet.purchased as f32 * candle.close),
+        OperationType::Sold => packet.balance + (packet.purchased as f32 * candle.close),
     };
     sum_after = sum_after - *commission;
     let operation = Operation {
         id,
         attempt: attempt.id,
         operation_type,
-        security: security.to_string(),
-        count,
+        security: packet.security.clone(),
+        count: packet.purchased,
         price: candle.close,
         commission: *commission,
         time_at: candle.begin,
-        sum_before: *balance,
+        sum_before: packet.balance,
         sum_after,
     };
-    *balance = sum_after;
+    packet.balance = sum_after;
     pg::add_operation(pool, &operation, prev).await;
     return operation.id;
 }
