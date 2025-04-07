@@ -1,6 +1,6 @@
 use crate::db::pg;
 use crate::models::common::{Attempt, AvgPeriod, Candle, Frame, Operation, OperationType};
-use chrono::{Datelike, NaiveDate};
+use chrono::{Datelike, NaiveDate, NaiveDateTime};
 use sqlx::postgres::PgPool;
 // use std::time::Duration;
 use uuid::Uuid;
@@ -23,48 +23,49 @@ pub async fn run_strategy(pool: &PgPool) {
         // Packet::new("SBER", 10, 100_000.0),
     ];
 
-    let mut period = begin.format("%Y%m").to_string().parse::<i32>().unwrap();
-
     for mut packet in packets {
-        // находим средний объём торгов за год
-        // let avg =
-        //     pg::get_average_volume(pool, &packet.security, AvgPeriod::Year, begin.year()).await;
+        strategy_1(pool, &mut packet, begin, end).await;
+    }
+}
 
-        // находим средний объём торгов за текущий месяц
-        let mut avg =
-            pg::get_average_volume(pool, &packet.security, AvgPeriod::Month, period).await;
-        let mut last_operation: Option<Uuid> = None;
-        let candles =
-            pg::get_candles(pool, &packet.security, begin, end, 200_000, &Frame::M1).await;
-        let attempt = Attempt {
-            id: Uuid::new_v4(),
-            profit: 2.0, // профит, который необходим
-            commission: 0.04,
-        };
-        pg::add_attempt(pool, &attempt).await;
+async fn strategy_1(pool: &PgPool, packet: &mut Packet, begin: NaiveDateTime, end: NaiveDateTime) {
+    // let mut period = begin.format("%Y%m").to_string().parse::<i32>().unwrap();
+    // находим средний объём торгов за год
+    let avg = pg::get_average_volume(pool, &packet.security, AvgPeriod::Year, begin.year()).await;
 
-        for candle in &candles {
-            let current_period = candle
-                .begin
-                .format("%Y%m")
-                .to_string()
-                .parse::<i32>()
-                .unwrap();
-            if period != current_period {
-                period = current_period;
-                avg =
-                    pg::get_average_volume(pool, &packet.security, AvgPeriod::Month, period).await;
-            }
-            last_operation = st_1(
-                pool,
-                &mut packet,
-                &candle,
-                &attempt, //&mut wallet,
-                avg,
-                last_operation,
-            )
-            .await;
-        }
+    // находим средний объём торгов за текущий месяц
+    // let mut avg =
+    //     pg::get_average_volume(pool, &packet.security, AvgPeriod::Month, period).await;
+    let mut last_operation: Option<Uuid> = None;
+    let candles = pg::get_candles(pool, &packet.security, begin, end, 200_000, &Frame::M1).await;
+    let attempt = Attempt {
+        id: Uuid::new_v4(),
+        profit: 1.5, // профит, который необходим
+        commission: 0.04,
+    };
+    pg::add_attempt(pool, &attempt).await;
+
+    for candle in &candles {
+        // let current_period = candle
+        //     .begin
+        //     .format("%Y%m")
+        //     .to_string()
+        //     .parse::<i32>()
+        //     .unwrap();
+        // if period != current_period {
+        //     period = current_period;
+        //     avg =
+        //         pg::get_average_volume(pool, &packet.security, AvgPeriod::Month, period).await;
+        // }
+        last_operation = strategy_1_logic(
+            pool,
+            packet,
+            &candle,
+            &attempt, //&mut wallet,
+            avg,
+            last_operation,
+        )
+        .await;
     }
 }
 
@@ -93,7 +94,7 @@ impl Packet {
     }
 }
 
-async fn st_1(
+async fn strategy_1_logic(
     pool: &PgPool,
     packet: &mut Packet,
     candle: &Candle,
@@ -102,7 +103,7 @@ async fn st_1(
     prev: Option<Uuid>,
 ) -> Option<Uuid> {
     if packet.purchased > 0 {
-        // выходим close >= 0.5%
+        // выходим
         if candle.close >= packet.profit {
             let commission: f32 =
                 ((packet.purchased as f32 * candle.close) / 100.0) * attempt.commission;
@@ -121,7 +122,7 @@ async fn st_1(
         }
         return prev;
     }
-    // находим точку входа: volume > avg && open > close
+    // находим точку входа
     if candle.volume as i32 > avg && candle.open > candle.close {
         let mut count = f32::floor(packet.balance / (candle.close)) as i32;
         let commission: f32 = ((count as f32 * candle.close) / 100.0) * attempt.commission;

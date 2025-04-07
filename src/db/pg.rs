@@ -233,7 +233,6 @@ pub async fn get_average_volume(
     from public.candles as c
     inner join public.securities as s on s.id = c.security_id
     where to_char(c.begin_t, 'yyyy')::integer = $1
-        and c.open < c.close
         and s.code = $2
     group by c.security_id;
         "#
@@ -243,8 +242,7 @@ pub async fn get_average_volume(
     select avg(c.volume)::integer, to_char(c.begin_t, 'yyyyMM')::integer as per
     from public.candles as c
     inner join public.securities as s on s.id = c.security_id
-    where to_char(c.begin_t - '1 mons'::interval, 'yyyyMM')::integer = $1
-        and c.open < c.close
+    where to_char(c.begin_t, 'yyyyMM')::integer = $1
         and s.code = $2
     group by c.security_id, per;
         "#
