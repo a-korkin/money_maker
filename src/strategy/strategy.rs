@@ -1,17 +1,17 @@
 use crate::db::pg;
-use crate::models::common::{Attempt, AvgPeriod, Candle, Frame, Operation, OperationType};
-use chrono::{Datelike, NaiveDate, NaiveDateTime};
+use crate::models::common::{Attempt, AvgPeriod, Candle, Frame, Operation, OperationType, Packet};
+use chrono::{Datelike, NaiveDate, NaiveDateTime, Timelike};
 use sqlx::postgres::PgPool;
-// use std::time::Duration;
+use std::time::Duration;
 use uuid::Uuid;
 
 pub async fn run_strategy(pool: &PgPool) {
-    let begin = NaiveDate::from_ymd_opt(2023, 1, 1)
+    let begin = NaiveDate::from_ymd_opt(2023, 1, 4)
         .unwrap()
         .and_hms_opt(10, 0, 0)
         .unwrap();
     // let end = begin + Duration::from_secs(60 * 60 * 24 * 31);
-    let end = NaiveDate::from_ymd_opt(2024, 1, 1)
+    let end = NaiveDate::from_ymd_opt(2023, 1, 4)
         .unwrap()
         .and_hms_opt(10, 0, 0)
         .unwrap();
@@ -24,39 +24,63 @@ pub async fn run_strategy(pool: &PgPool) {
     ];
 
     for mut packet in packets {
-        strategy_1(pool, &mut packet, begin, end).await;
+        // strategy_1(pool, &mut packet, begin, end).await;
+        strategy_2(pool, &mut packet, begin, end).await;
+    }
+}
+
+async fn strategy_2(pool: &PgPool, packet: &mut Packet, begin: NaiveDateTime, end: NaiveDateTime) {
+    // находим средний объём по дням
+    // для определения точек входа смотрим предыдущий день
+    let averages = pg::get_average_by_days(
+        pool,
+        &packet.security,
+        begin - Duration::from_secs(60 * 60 * 24),
+        end,
+    )
+    .await;
+    // let mut last_operation: Option<Uuid> = None;
+    let candles = pg::get_candles_rn(pool, &packet.security, begin, end).await;
+    let attempt = Attempt {
+        id: Uuid::new_v4(),
+        profit: 1.5,
+        commission: 0.04,
+    };
+    pg::add_attempt(pool, &attempt).await;
+
+    let mut prev_avg = 100;
+    let mut current_date = candles.first().unwrap().begin.date();
+    let mut i: i32 = 0;
+    let mut vol: f32 = 0.0;
+
+    for candle in candles {
+        if candle.volume >= prev_avg as f32 * 5.0
+            && candle.open > candle.close
+            && candle.begin.hour() < 19
+        {}
+        if current_date != candle.begin.date() {
+            current_date = candle.begin.date();
+            prev_avg = (vol / i as f32) as i32;
+        } else {
+            i += 1;
+            vol += candle.volume;
+        }
     }
 }
 
 async fn strategy_1(pool: &PgPool, packet: &mut Packet, begin: NaiveDateTime, end: NaiveDateTime) {
-    // let mut period = begin.format("%Y%m").to_string().parse::<i32>().unwrap();
     // находим средний объём торгов за год
     let avg = pg::get_average_volume(pool, &packet.security, AvgPeriod::Year, begin.year()).await;
-
-    // находим средний объём торгов за текущий месяц
-    // let mut avg =
-    //     pg::get_average_volume(pool, &packet.security, AvgPeriod::Month, period).await;
     let mut last_operation: Option<Uuid> = None;
     let candles = pg::get_candles(pool, &packet.security, begin, end, 200_000, &Frame::M1).await;
     let attempt = Attempt {
         id: Uuid::new_v4(),
-        profit: 1.5, // профит, который необходим
+        profit: 1.5,
         commission: 0.04,
     };
     pg::add_attempt(pool, &attempt).await;
 
     for candle in &candles {
-        // let current_period = candle
-        //     .begin
-        //     .format("%Y%m")
-        //     .to_string()
-        //     .parse::<i32>()
-        //     .unwrap();
-        // if period != current_period {
-        //     period = current_period;
-        //     avg =
-        //         pg::get_average_volume(pool, &packet.security, AvgPeriod::Month, period).await;
-        // }
         last_operation = strategy_1_logic(
             pool,
             packet,
@@ -66,31 +90,6 @@ async fn strategy_1(pool: &PgPool, packet: &mut Packet, begin: NaiveDateTime, en
             last_operation,
         )
         .await;
-    }
-}
-
-#[allow(dead_code)]
-struct Wallet {
-    balance: f32,
-}
-
-struct Packet {
-    security: String,
-    min_count: i32,
-    purchased: i32,
-    profit: f32,
-    balance: f32,
-}
-
-impl Packet {
-    fn new(security: &str, min_count: i32, balance: f32) -> Self {
-        Self {
-            security: security.to_string(),
-            min_count,
-            purchased: 0,
-            profit: 0.0,
-            balance,
-        }
     }
 }
 

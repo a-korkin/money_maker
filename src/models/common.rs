@@ -56,7 +56,6 @@ impl ToString for Frame {
 }
 
 #[derive(Debug, Deserialize, sqlx::FromRow)]
-#[allow(dead_code)]
 pub struct Candle {
     pub open: f32,
     pub close: f32,
@@ -90,6 +89,24 @@ impl ToSql for Candle {
     }
 }
 
+#[allow(dead_code)]
+#[derive(Debug, Deserialize, sqlx::FromRow)]
+pub struct CandleRn {
+    pub open: f32,
+    pub close: f32,
+    pub high: f32,
+    pub low: f32,
+    pub value: f32,
+    pub volume: f32,
+    #[serde(with = "unix_timestamp")]
+    pub begin: NaiveDateTime,
+    #[serde(with = "unix_timestamp")]
+    pub end: NaiveDateTime,
+    pub rn: i32,
+    pub day: i32,
+    pub week: i32,
+}
+
 pub struct DateRange(pub NaiveDateTime, pub NaiveDateTime);
 
 impl Iterator for DateRange {
@@ -104,6 +121,7 @@ impl Iterator for DateRange {
     }
 }
 
+#[allow(dead_code)]
 pub enum AvgPeriod {
     Year,
     Month,
@@ -150,4 +168,29 @@ pub struct Attempt {
     pub id: Uuid,
     pub profit: f32,
     pub commission: f32,
+}
+
+#[allow(dead_code)]
+struct Wallet {
+    balance: f32,
+}
+
+pub struct Packet {
+    pub security: String,
+    pub min_count: i32,
+    pub purchased: i32,
+    pub profit: f32,
+    pub balance: f32,
+}
+
+impl Packet {
+    pub fn new(security: &str, min_count: i32, balance: f32) -> Self {
+        Self {
+            security: security.to_string(),
+            min_count,
+            purchased: 0,
+            profit: 0.0,
+            balance,
+        }
+    }
 }
