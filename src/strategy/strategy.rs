@@ -6,14 +6,14 @@ use sqlx::postgres::PgPool;
 use uuid::Uuid;
 
 pub async fn run_strategy(pool: &PgPool) {
-    let begin = NaiveDate::from_ymd_opt(2024, 1, 1)
+    let begin = NaiveDate::from_ymd_opt(2024, 6, 10)
         .unwrap()
         .and_hms_opt(10, 0, 0)
         .unwrap();
     // let end = begin + Duration::from_secs(60 * 60 * 24 * 31);
-    let end = NaiveDate::from_ymd_opt(2025, 1, 1)
+    let end = NaiveDate::from_ymd_opt(2024, 6, 10)
         .unwrap()
-        .and_hms_opt(10, 0, 0)
+        .and_hms_opt(11, 0, 0)
         .unwrap();
     // let mut wallet = Wallet { balance: 100_000.0 };
 
@@ -25,7 +25,36 @@ pub async fn run_strategy(pool: &PgPool) {
 
     for mut packet in packets {
         // strategy_1(pool, &mut packet, begin, end).await;
-        strategy_2(pool, &mut packet, begin, end).await;
+        // strategy_2(pool, &mut packet, begin, end).await;
+        strategy_3(pool, &mut packet, begin, end).await;
+    }
+}
+
+async fn strategy_3(pool: &PgPool, packet: &mut Packet, begin: NaiveDateTime, end: NaiveDateTime) {
+    let candles = pg::get_candles(pool, &packet.security, begin, end, 200_000, &Frame::M1).await;
+    let mut volume_up: f32 = 0.0;
+    let mut volume_down: f32 = 0.0;
+    let mut volume_all: f32 = 0.0;
+
+    for candle in candles {
+        if candle.close > candle.open {
+            volume_up += candle.volume;
+        }
+        if candle.close < candle.open {
+            volume_down += candle.volume;
+        }
+        volume_all += candle.volume;
+
+        let red_line = (volume_up - volume_down) / (volume_all / 100.0);
+
+        println!(
+            "time: {}, volume_up: {}, volume_down: {}, volume_all: {}, red_line: {}",
+            candle.begin.time(),
+            volume_up,
+            volume_down,
+            volume_all,
+            red_line
+        );
     }
 }
 
