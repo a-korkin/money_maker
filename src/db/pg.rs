@@ -1,7 +1,5 @@
-use crate::models::common::{
-    Attempt, AvgPeriod, Candle, CandleRn, Frame, Operation, SecuritiesStr, ToSql,
-};
-use chrono::{NaiveDate, NaiveDateTime};
+use crate::models::common::{Attempt, AvgPeriod, Candle, Frame, Operation, SecuritiesStr, ToSql};
+use chrono::NaiveDateTime;
 use dotenv;
 use sqlx::postgres::PgPool;
 use sqlx::types::Uuid;
@@ -88,42 +86,6 @@ pub async fn get_all_securities(pool: &PgPool) -> Vec<String> {
         .iter()
         .map(|a| a.0.to_owned())
         .collect::<Vec<String>>();
-}
-
-pub async fn get_candles_rn(
-    pool: &PgPool,
-    security: &str,
-    begin: NaiveDateTime,
-    end: NaiveDateTime,
-) -> Vec<CandleRn> {
-    let sql = r#"
-    select 
-        c.open::float4 as open, 
-        c.close::float4 as close, 
-        c.high::float4 as high, 
-        c.low::float4 as low, 
-        c.value::float4 as value, 
-        c.volume::float4 as volume, 
-        c.begin_t as begin, c.end_t as end,
-        (row_number() over(partition by c.begin_t::date order by c.begin_t))::integer as rn,
-        to_char(c.begin_t, 'dd')::integer as day,
-        to_char(c.begin_t, 'WW')::integer as week
-    from public.candles as c
-    inner join public.securities as s on s.id = c.security_id
-    where s.code = $1
-        and c.begin_t::date >= $2::date
-        and c.begin_t::date <= $3::date
-    order by c.begin_t;
-        "#;
-
-    let result: Vec<CandleRn> = sqlx::query_as(sql)
-        .bind(security)
-        .bind(begin)
-        .bind(end)
-        .fetch_all(pool)
-        .await
-        .unwrap();
-    result
 }
 
 pub async fn get_candles(
@@ -295,49 +257,4 @@ pub async fn get_average_volume(
         .unwrap();
 
     return result.0;
-}
-
-pub async fn get_average_by_days(
-    pool: &PgPool,
-    security: &str,
-    begin: NaiveDateTime,
-    end: NaiveDateTime,
-) -> Vec<(NaiveDate, i32, i32, i32, i32)> {
-    let sql = r#"
-    select 
-        a.dbegin, (row_number() over(order by a.dbegin))::integer as day, 
-        a.week::integer, a.avg_day, b.avg_week
-    from 
-    (
-        select c.begin_t::date as dbegin, to_char(c.begin_t, 'WW') as week,
-            avg(c.volume)::integer as avg_day
-        from public.candles as c
-        inner join public.securities as s on s.id = c.security_id
-        where s.code = $1
-            and c.begin_t::date >= $2::date
-            and c.begin_t::date <= $3::date
-        group by dbegin, week
-    ) as a
-    inner join 
-    (
-        select to_char(c.begin_t, 'WW') as week,
-            avg(c.volume)::integer as avg_week
-        from public.candles as c
-        inner join public.securities as s on s.id = c.security_id
-        where s.code = $1
-            and c.begin_t::date >= $2::date
-            and c.begin_t::date <= $3::date
-        group by week
-    ) as b on a.week = b.week
-    order by a.dbegin;
-        "#;
-
-    let result = sqlx::query_as::<_, (NaiveDate, i32, i32, i32, i32)>(sql)
-        .bind(security)
-        .bind(begin)
-        .bind(end)
-        .fetch_all(pool)
-        .await
-        .unwrap();
-    result
 }
