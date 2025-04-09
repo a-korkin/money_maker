@@ -55,7 +55,7 @@ impl ToString for Frame {
     }
 }
 
-#[derive(Debug, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Deserialize, sqlx::FromRow, Clone)]
 pub struct Candle {
     pub open: f32,
     pub close: f32,

@@ -6,14 +6,14 @@ use sqlx::postgres::PgPool;
 use uuid::Uuid;
 
 pub async fn run_strategy(pool: &PgPool) {
-    let begin = NaiveDate::from_ymd_opt(2023, 1, 1)
+    let begin = NaiveDate::from_ymd_opt(2024, 6, 10)
         .unwrap()
         .and_hms_opt(0, 0, 0)
         .unwrap();
     // let end = begin + Duration::from_secs(60 * 60 * 24 * 31);
-    let end = NaiveDate::from_ymd_opt(2024, 1, 1)
+    let end = NaiveDate::from_ymd_opt(2024, 6, 10)
         .unwrap()
-        .and_hms_opt(0, 0, 0)
+        .and_hms_opt(10, 30, 0)
         .unwrap();
     // let mut wallet = Wallet { balance: 100_000.0 };
 
@@ -24,8 +24,8 @@ pub async fn run_strategy(pool: &PgPool) {
     ];
 
     for mut packet in packets {
-        strategy_1(pool, &mut packet, begin, end).await;
-        strategy_2(pool, &mut packet, begin, end).await;
+        // strategy_1(pool, &mut packet, begin, end).await;
+        // strategy_2(pool, &mut packet, begin, end).await;
         strategy_3(pool, &mut packet, begin, end).await;
     }
 }
@@ -34,11 +34,10 @@ async fn strategy_3(pool: &PgPool, packet: &mut Packet, begin: NaiveDateTime, en
     let candles = pg::get_candles(pool, &packet.security, begin, end, 200_000, &Frame::M1).await;
     let mut volume_up: f32 = 0.0;
     let mut volume_down: f32 = 0.0;
-    // let mut volume_all: f32 = 0.0;
 
     let attempt = Attempt {
         id: Uuid::new_v4(),
-        profit: 1.5,
+        profit: 0.1,
         commission: 0.04,
     };
     pg::add_attempt(pool, &attempt).await;
@@ -46,8 +45,9 @@ async fn strategy_3(pool: &PgPool, packet: &mut Packet, begin: NaiveDateTime, en
     // let avg = pg::get_average_volume(pool, &packet.security, AvgPeriod::Year, begin.year()).await;
 
     let mut current_date = candles.first().unwrap().begin.date();
+    let candles_skip: Vec<Candle> = candles.clone();
 
-    for candle in candles {
+    for (candle, next) in std::iter::zip(candles, candles_skip.iter().skip(1)) {
         if candle.begin.date() != current_date {
             current_date = candle.begin.date();
             volume_up = 0.0;
@@ -60,27 +60,27 @@ async fn strategy_3(pool: &PgPool, packet: &mut Packet, begin: NaiveDateTime, en
         if candle.close < candle.open {
             volume_down += candle.volume;
         }
-        // volume_all += candle.volume;
 
-        // let diff = volume_up - volume_down;
+        let diff = volume_up - volume_down;
         let red_line = (volume_up - volume_down) / ((volume_up + volume_down) / 100.0);
 
-        // println!(
-        //     "time: {}, volume: {}, volume_up: {}, volume_down: {}, diff: {}, red_line: {}",
-        //     candle.begin, candle.volume, volume_up, volume_down, diff, red_line,
-        // );
+        println!(
+            "time: {}, volume: {}, volume_up: {}, volume_down: {}, red_line: {}, next_open: {}",
+            candle.begin, candle.volume, volume_up, volume_down, red_line, next.open,
+        );
 
-        let sold: bool = candle.close >= packet.profit || red_line < 5.0;
-        // let buy: bool = red_line > 7.0 && candle.open < candle.close;
-        // if candle.volume as i32 > avg && candle.open > candle.close {
-        // let buy: bool = candle.volume as i32 > avg && candle.open > candle.close;
-        let buy: bool = red_line > 5.0 && candle.close >= candle.open + (candle.open / 100.0) * 0.3;
+        // let sold: bool =
+        //     (candle.close >= packet.profit || red_line < 5.0) && candle.begin.hour() > 12;
+        // let buy: bool = red_line > 5.0
+        //     && candle.close >= candle.open + (candle.open / 100.0) * 0.3
+        //     && candle.begin.hour() < 19;
 
-        last_operation =
-            strategy_logic(pool, packet, &candle, &attempt, last_operation, sold, buy).await;
+        // last_operation =
+        //     strategy_logic(pool, packet, &candle, &attempt, last_operation, sold, buy).await;
     }
 }
 
+#[allow(dead_code)]
 async fn strategy_2(pool: &PgPool, packet: &mut Packet, begin: NaiveDateTime, end: NaiveDateTime) {
     let mut last_operation: Option<Uuid> = None;
     let candles = pg::get_candles(pool, &packet.security, begin, end, 200_000, &Frame::M1).await;
@@ -114,6 +114,7 @@ async fn strategy_2(pool: &PgPool, packet: &mut Packet, begin: NaiveDateTime, en
     }
 }
 
+#[allow(dead_code)]
 async fn strategy_1(pool: &PgPool, packet: &mut Packet, begin: NaiveDateTime, end: NaiveDateTime) {
     // находим средний объём торгов за год
     let avg = pg::get_average_volume(pool, &packet.security, AvgPeriod::Year, begin.year()).await;
@@ -130,16 +131,8 @@ async fn strategy_1(pool: &PgPool, packet: &mut Packet, begin: NaiveDateTime, en
         let sold: bool = candle.close >= packet.profit;
         let buy: bool = candle.volume as i32 > avg && candle.open > candle.close;
 
-        last_operation = strategy_logic(
-            pool,
-            packet,
-            &candle,
-            &attempt, //&mut wallet,
-            last_operation,
-            sold,
-            buy,
-        )
-        .await;
+        last_operation =
+            strategy_logic(pool, packet, &candle, &attempt, last_operation, sold, buy).await;
     }
 }
 
@@ -147,7 +140,7 @@ async fn strategy_logic(
     pool: &PgPool,
     packet: &mut Packet,
     candle: &Candle,
-    attempt: &Attempt, // wallet: &mut Wallet,
+    attempt: &Attempt,
     prev: Option<Uuid>,
     sold: bool,
     buy: bool,
@@ -186,16 +179,7 @@ async fn strategy_logic(
         }
         packet.purchased += count;
         packet.profit = (candle.close / 100.0) * attempt.profit + candle.close;
-        let op_id = create_operation(
-            pool,
-            attempt,
-            "buy",
-            packet,
-            &commission, //&mut wallet.balance,
-            prev,
-            candle,
-        )
-        .await;
+        let op_id = create_operation(pool, attempt, "buy", packet, &commission, prev, candle).await;
 
         return Some(op_id);
     }
@@ -207,7 +191,7 @@ async fn create_operation(
     attempt: &Attempt,
     op_type: &str,
     packet: &mut Packet,
-    commission: &f32, //balance: &mut f32,
+    commission: &f32,
     prev: Option<Uuid>,
     candle: &Candle,
 ) -> Uuid {
