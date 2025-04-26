@@ -1,4 +1,4 @@
-use chrono::{Duration, NaiveDateTime};
+use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
 use serde::Deserialize;
 use sqlx;
 use sqlx::types::Uuid;
@@ -87,6 +87,41 @@ impl ToSql for Candle {
             self.end
         )
     }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub struct Trade {
+    #[serde(rename = "TRADENO")]
+    pub trade_no: i64,
+    #[serde(rename = "TRADETIME")]
+    pub trade_time: NaiveTime,
+    #[serde(rename = "BOARDID")]
+    pub board_id: String,
+    #[serde(rename = "SECID")]
+    pub sec_id: String,
+    #[serde(rename = "PRICE")]
+    pub price: f32,
+    #[serde(rename = "QUANTITY")]
+    pub quantity: i32,
+    #[serde(rename = "VALUE")]
+    pub value: f32,
+    #[serde(rename = "PERIOD")]
+    pub period: char,
+    #[serde(rename = "TRADETIME_GRP")]
+    pub tradetime_grp: i32,
+    #[serde(with = "unix_timestamp", rename = "SYSTIME")]
+    pub systime: NaiveDateTime,
+    #[serde(rename = "BUYSELL")]
+    pub buysell: char,
+    #[serde(rename = "DECIMALS")]
+    pub decimals: i32,
+    #[serde(rename = "TRADINGSESSION")]
+    pub trading_session: i32,
+    #[serde(rename = "TRADEDATE")]
+    pub trade_date: NaiveDate,
+    #[serde(rename = "TRADE_SESSION_DATE")]
+    pub trade_session_date: NaiveDate,
 }
 
 pub struct DateRange(pub NaiveDateTime, pub NaiveDateTime);

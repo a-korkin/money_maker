@@ -12,7 +12,7 @@ use db::pg;
 use db::pg::add_candles;
 use dotenv;
 use log::{error, info};
-use models::common::{Candle, DateRange};
+use models::common::{Candle, DateRange, Trade};
 use plotters::prelude::*;
 use reqwest;
 use sqlx::postgres::PgPool;
@@ -78,13 +78,20 @@ pub async fn run() {
         .expect("failed parse to DateTime")
         .and_time(NaiveTime::default());
 
-    // if args.download {
-    //     fetch_data(&securities, DownloadType::Candles, start, end).await;
-    // }
-
     match args.download.as_str() {
         "c" | "candles" => fetch_data(&securities, DownloadType::Candles, start, end).await,
-        "t" | "trades" => fetch_data(&securities, DownloadType::Trades, start, end).await,
+        "t" | "trades" => {
+            fetch_data(&securities, DownloadType::Trades, start, end).await;
+            let path = &dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
+            let path = Path::new(path)
+                .join("trades")
+                .join("MOEX")
+                .join("2025-04-26.csv");
+            let trades = get_trades_from_csv(path.to_str().unwrap()).await;
+            for trade in trades {
+                println!("{:?}", trade);
+            }
+        }
         _ => {}
     }
 
@@ -203,15 +210,30 @@ pub async fn download(
         error!("response status: {}", response.status());
         return Ok(-1);
     }
-    let rows = response
-        .text()
-        .await
-        .expect("failed to get body")
-        .split("\n")
-        .skip(2)
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_string())
-        .collect::<Vec<String>>();
+
+    let rows = match download_type {
+        DownloadType::Trades => response
+            .text()
+            .await
+            .expect("failed to get body")
+            .split_once("dataversion")
+            .unwrap()
+            .0
+            .split("\n")
+            .skip(2)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>(),
+        _ => response
+            .text()
+            .await
+            .expect("failed to get body")
+            .split("\n")
+            .skip(2)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>(),
+    };
 
     let count = rows.len();
     if count <= 1 {
@@ -243,6 +265,17 @@ pub async fn get_candles_from_csv(path: &str) -> Vec<Candle> {
         .expect("failed to read csv");
 
     rdr.deserialize::<Candle>()
+        .map(|c| c.unwrap())
+        .collect::<Vec<_>>()
+}
+
+pub async fn get_trades_from_csv(path: &str) -> Vec<Trade> {
+    let mut rdr = csv::ReaderBuilder::new()
+        .delimiter(b';')
+        .from_path(path)
+        .expect("failed to read csv");
+
+    rdr.deserialize::<Trade>()
         .map(|c| c.unwrap())
         .collect::<Vec<_>>()
 }
