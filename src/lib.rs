@@ -28,11 +28,11 @@ use utils::logger;
 #[command(version, about, long_about = None)]
 struct Args {
     /// List of securities separated by comma
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "all")]
     secs: String,
 
     /// Download csv files
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "none")]
     download: String,
 
     /// Adding to DB
