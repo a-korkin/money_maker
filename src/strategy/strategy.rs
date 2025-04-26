@@ -11,9 +11,9 @@ pub async fn run_strategy(pool: &PgPool) {
         .and_hms_opt(0, 0, 0)
         .unwrap();
     // let end = begin + Duration::from_secs(60 * 60 * 24 * 31);
-    let end = NaiveDate::from_ymd_opt(2024, 6, 10)
+    let end = NaiveDate::from_ymd_opt(2024, 6, 11)
         .unwrap()
-        .and_hms_opt(10, 30, 0)
+        .and_hms_opt(0, 0, 0)
         .unwrap();
     // let mut wallet = Wallet { balance: 100_000.0 };
 
@@ -37,37 +37,60 @@ async fn strategy_3(pool: &PgPool, packet: &mut Packet, begin: NaiveDateTime, en
 
     let attempt = Attempt {
         id: Uuid::new_v4(),
-        profit: 0.1,
+        profit: 0.25,
         commission: 0.04,
     };
     pg::add_attempt(pool, &attempt).await;
     let mut last_operation: Option<Uuid> = None;
-    // let avg = pg::get_average_volume(pool, &packet.security, AvgPeriod::Year, begin.year()).await;
 
     let mut current_date = candles.first().unwrap().begin.date();
     let candles_skip: Vec<Candle> = candles.clone();
+    // объём для OZON > 8000
+    let break_volume: u32 = 1000 * 9;
+    let mut volume_ok: bool = false;
+    // let mut streak_up: u8 = 0;
+    // let mut streak_down: u8 = 0;
 
     for (candle, next) in std::iter::zip(candles, candles_skip.iter().skip(1)) {
         if candle.begin.date() != current_date {
             current_date = candle.begin.date();
             volume_up = 0.0;
             volume_down = 0.0;
+            volume_ok = false;
+            // streak_up = 0;
+            // streak_down = 0;
             // volume_all = 0.0;
         }
         if candle.close > candle.open {
             volume_up += candle.volume;
+            // streak_up += 1;
+            if candle.volume as u32 >= break_volume {
+                volume_ok = false;
+            }
         }
         if candle.close < candle.open {
             volume_down += candle.volume;
+            // streak_down += 1;
+            if candle.volume as u32 >= break_volume {
+                volume_ok = true;
+            }
         }
 
-        let diff = volume_up - volume_down;
-        let red_line = (volume_up - volume_down) / ((volume_up + volume_down) / 100.0);
+        // let diff = volume_up - volume_down;
+        // let red_line = (volume_up - volume_down) / ((volume_up + volume_down) / 100.0);
+        let percent = (f32::max(candle.open, candle.close)
+            / (f32::min(candle.open, candle.close) / 100.0))
+            - 100.0;
+        let percent = if candle.open > candle.close {
+            -1f32 * percent
+        } else {
+            percent
+        };
 
-        println!(
-            "time: {}, volume: {}, volume_up: {}, volume_down: {}, red_line: {}, next_open: {}",
-            candle.begin, candle.volume, volume_up, volume_down, red_line, next.open,
-        );
+        // println!(
+        //     "time: {}, volume: {}, volume_up: {}, volume_down: {}, profit: {}",
+        //     candle.begin, candle.volume, volume_up, volume_down, packet.profit,
+        // );
 
         // let sold: bool =
         //     (candle.close >= packet.profit || red_line < 5.0) && candle.begin.hour() > 12;
@@ -75,8 +98,23 @@ async fn strategy_3(pool: &PgPool, packet: &mut Packet, begin: NaiveDateTime, en
         //     && candle.close >= candle.open + (candle.open / 100.0) * 0.3
         //     && candle.begin.hour() < 19;
 
-        // last_operation =
-        //     strategy_logic(pool, packet, &candle, &attempt, last_operation, sold, buy).await;
+        let buy: bool = volume_ok
+            && percent >= 0.0
+            && percent <= 0.001
+            && candle.begin.hour() != 17
+            && candle.begin.hour() != 18;
+        let sold: bool = candle.close >= packet.profit;
+
+        if buy {
+            let operation = if buy { "buy" } else { "sold" };
+            println!(
+                "time: {}, operation: {}, profit: {}, balance: {}, percent: {}",
+                candle.begin, operation, packet.profit, packet.balance, percent,
+            );
+        }
+
+        last_operation =
+            strategy_logic(pool, packet, next, &attempt, last_operation, sold, buy).await;
     }
 }
 
@@ -149,7 +187,7 @@ async fn strategy_logic(
         // выходим
         if sold {
             let commission: f32 =
-                ((packet.purchased as f32 * candle.close) / 100.0) * attempt.commission;
+                ((packet.purchased as f32 * candle.open) / 100.0) * attempt.commission;
             let op_id = create_operation(
                 pool,
                 attempt,
@@ -167,9 +205,9 @@ async fn strategy_logic(
     }
     // находим точку входа
     if buy {
-        let mut count = f32::floor(packet.balance / (candle.close)) as i32;
-        let commission: f32 = ((count as f32 * candle.close) / 100.0) * attempt.commission;
-        while (count as f32 * candle.close) + commission > packet.balance {
+        let mut count = f32::floor(packet.balance / (candle.open)) as i32;
+        let commission: f32 = ((count as f32 * candle.open) / 100.0) * attempt.commission;
+        while (count as f32 * candle.open) + commission > packet.balance {
             count -= 1;
         }
         count = (count / packet.min_count) * packet.min_count;
@@ -178,7 +216,7 @@ async fn strategy_logic(
             return prev;
         }
         packet.purchased += count;
-        packet.profit = (candle.close / 100.0) * attempt.profit + candle.close;
+        packet.profit = (candle.open / 100.0) * attempt.profit + candle.open;
         let op_id = create_operation(pool, attempt, "buy", packet, &commission, prev, candle).await;
 
         return Some(op_id);
@@ -198,8 +236,8 @@ async fn create_operation(
     let id = Uuid::new_v4();
     let operation_type = OperationType::from(op_type);
     let mut sum_after: f32 = match operation_type {
-        OperationType::Buy => packet.balance - (packet.purchased as f32 * candle.close),
-        OperationType::Sold => packet.balance + (packet.purchased as f32 * candle.close),
+        OperationType::Buy => packet.balance - (packet.purchased as f32 * candle.open),
+        OperationType::Sold => packet.balance + (packet.purchased as f32 * candle.open),
     };
     sum_after = sum_after - *commission;
     let operation = Operation {
@@ -208,7 +246,7 @@ async fn create_operation(
         operation_type,
         security: packet.security.clone(),
         count: packet.purchased,
-        price: candle.close,
+        price: candle.open,
         commission: *commission,
         time_at: candle.begin,
         sum_before: packet.balance,

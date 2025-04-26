@@ -79,7 +79,7 @@ pub async fn run() {
         .and_time(NaiveTime::default());
 
     if args.download {
-        fetch_data(&securities, start, end).await;
+        fetch_data(&securities, DownloadType::Candles, start, end).await;
     }
 
     if args.add {
@@ -92,7 +92,26 @@ pub async fn run_terminal(pool: &PgPool) {
     terminal::terminal::run_terminal(pool).await;
 }
 
-pub async fn fetch_data(securities: &Vec<String>, start: NaiveDateTime, end: NaiveDateTime) {
+pub enum DownloadType {
+    Candles,
+    Trades,
+}
+
+impl ToString for DownloadType {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Candles => String::from("candles"),
+            Self::Trades => String::from("trades"),
+        }
+    }
+}
+
+pub async fn fetch_data(
+    securities: &Vec<String>,
+    download_type: DownloadType,
+    start: NaiveDateTime,
+    end: NaiveDateTime,
+) {
     let begin = Local::now().time();
     let date_range = DateRange(start, end);
     for date in date_range {
@@ -101,28 +120,35 @@ pub async fn fetch_data(securities: &Vec<String>, start: NaiveDateTime, end: Nai
         let iss_moex = dotenv::var("ISS_MOEX").expect("failed to read ISS_MOEX");
 
         for security in securities {
-            let mut start: u32 = 0;
-            let mut i = 1;
-            loop {
-                let url = format!(
-                    "{iss_moex}/{security}/candles.csv?from={date}\
+            match download_type {
+                DownloadType::Candles => {
+                    let mut start: u32 = 0;
+                    let mut i = 1;
+                    loop {
+                        let url = format!(
+                            "{iss_moex}/{security}/candles.csv?from={date}\
                 &till={date}&interval={interval}&start={start}"
-                );
-                let file_name = &format!("{date}_{i}.csv");
-                match download(&url, security, file_name).await {
-                    Ok(added) => {
-                        if added < 0 {
-                            break;
+                        );
+                        let file_name = &format!("{date}_{i}.csv");
+                        match download(&download_type, &url, security, file_name).await {
+                            Ok(added) => {
+                                if added < 0 {
+                                    break;
+                                }
+                                start += added as u32;
+                                i += 1;
+                                info!("{security} => {file_name}, count => {added}");
+                                thread::sleep(time::Duration::from_millis(500));
+                            }
+                            Err(e) => {
+                                error!("{}", e);
+                                break;
+                            }
                         }
-                        start += added as u32;
-                        i += 1;
-                        info!("{security} => {file_name}, count => {added}");
-                        thread::sleep(time::Duration::from_millis(500));
                     }
-                    Err(e) => {
-                        error!("{}", e);
-                        break;
-                    }
+                }
+                DownloadType::Trades => {
+                    let _url = format!("{iss_moex}/{security}/trades.csv");
                 }
             }
         }
@@ -141,7 +167,12 @@ pub fn elapsed_time(start: NaiveTime, end: NaiveTime) -> String {
     )
 }
 
-pub async fn download(url: &str, security: &str, file_name: &str) -> std::io::Result<i64> {
+pub async fn download(
+    download_type: &DownloadType,
+    url: &str,
+    security: &str,
+    file_name: &str,
+) -> std::io::Result<i64> {
     let response = reqwest::get(url).await.expect("failed to send request");
     if response.status() != 200 {
         error!("response status: {}", response.status());
@@ -163,7 +194,9 @@ pub async fn download(url: &str, security: &str, file_name: &str) -> std::io::Re
     }
 
     let path = &dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
-    let path = Path::new(path).join(security);
+    let path = Path::new(path)
+        .join(download_type.to_string())
+        .join(security);
 
     if !fs::exists(&path)? {
         fs::create_dir_all(&path)?;
