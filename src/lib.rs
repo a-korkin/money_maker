@@ -33,7 +33,7 @@ struct Args {
 
     /// Download csv files
     #[arg(short, long)]
-    download: bool,
+    download: String,
 
     /// Adding to DB
     #[arg(short, long)]
@@ -54,8 +54,8 @@ pub async fn run() {
         return;
     }
 
-    strategy::strategy::run_strategy(&pool).await;
-    return;
+    // strategy::strategy::run_strategy(&pool).await;
+    // return;
 
     let securities = match args.secs.as_str() {
         "all" => pg::get_all_securities(&pool).await,
@@ -78,8 +78,14 @@ pub async fn run() {
         .expect("failed parse to DateTime")
         .and_time(NaiveTime::default());
 
-    if args.download {
-        fetch_data(&securities, DownloadType::Candles, start, end).await;
+    // if args.download {
+    //     fetch_data(&securities, DownloadType::Candles, start, end).await;
+    // }
+
+    match args.download.as_str() {
+        "c" | "candles" => fetch_data(&securities, DownloadType::Candles, start, end).await,
+        "t" | "trades" => fetch_data(&securities, DownloadType::Trades, start, end).await,
+        _ => {}
     }
 
     if args.add {
@@ -148,7 +154,23 @@ pub async fn fetch_data(
                     }
                 }
                 DownloadType::Trades => {
-                    let _url = format!("{iss_moex}/{security}/trades.csv");
+                    let url = format!("{iss_moex}/{security}/trades.csv");
+                    let file_name = &format!("{date}.csv");
+                    match download(&download_type, &url, security, file_name).await {
+                        Ok(added) => {
+                            if added < 0 {
+                                break;
+                            }
+                            // start += added as u32;
+                            // i += 1;
+                            info!("{security} => {file_name}, count => {added}");
+                            thread::sleep(time::Duration::from_millis(500));
+                        }
+                        Err(e) => {
+                            error!("{}", e);
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -205,7 +227,10 @@ pub async fn download(
     let mut file = fs::File::create(file_path)?;
     file.write_all(rows.join("\n").as_bytes())?;
 
-    Ok((count - 1) as i64)
+    match download_type {
+        DownloadType::Trades => return Ok(-1i64),
+        _ => return Ok((count - 1) as i64),
+    }
 }
 
 pub async fn get_candles_from_csv(path: &str) -> Vec<Candle> {
