@@ -89,24 +89,6 @@ impl ToSql for Candle {
     }
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Deserialize, sqlx::FromRow)]
-pub struct CandleRn {
-    pub open: f32,
-    pub close: f32,
-    pub high: f32,
-    pub low: f32,
-    pub value: f32,
-    pub volume: f32,
-    #[serde(with = "unix_timestamp")]
-    pub begin: NaiveDateTime,
-    #[serde(with = "unix_timestamp")]
-    pub end: NaiveDateTime,
-    pub rn: i32,
-    pub day: i32,
-    pub week: i32,
-}
-
 pub struct DateRange(pub NaiveDateTime, pub NaiveDateTime);
 
 impl Iterator for DateRange {

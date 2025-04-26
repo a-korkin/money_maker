@@ -118,16 +118,18 @@ pub async fn fetch_data(
     start: NaiveDateTime,
     end: NaiveDateTime,
 ) {
-    let begin = Local::now().time();
-    let date_range = DateRange(start, end);
-    for date in date_range {
-        let date = date.format("%Y-%m-%d");
-        let interval: u8 = 1;
-        let iss_moex = dotenv::var("ISS_MOEX").expect("failed to read ISS_MOEX");
+    let today = Local::now();
+    let begin = today.time();
+    let iss_moex = dotenv::var("ISS_MOEX").expect("failed to read ISS_MOEX");
 
-        for security in securities {
-            match download_type {
-                DownloadType::Candles => {
+    match download_type {
+        DownloadType::Candles => {
+            let date_range = DateRange(start, end);
+            for date in date_range {
+                let date = date.format("%Y-%m-%d");
+                let interval: u8 = 1;
+
+                for security in securities {
                     let mut start: u32 = 0;
                     let mut i = 1;
                     loop {
@@ -153,23 +155,24 @@ pub async fn fetch_data(
                         }
                     }
                 }
-                DownloadType::Trades => {
-                    let url = format!("{iss_moex}/{security}/trades.csv");
-                    let file_name = &format!("{date}.csv");
-                    match download(&download_type, &url, security, file_name).await {
-                        Ok(added) => {
-                            if added < 0 {
-                                break;
-                            }
-                            // start += added as u32;
-                            // i += 1;
-                            info!("{security} => {file_name}, count => {added}");
-                            thread::sleep(time::Duration::from_millis(500));
-                        }
-                        Err(e) => {
-                            error!("{}", e);
+            }
+        }
+        DownloadType::Trades => {
+            for security in securities {
+                let url = format!("{iss_moex}/{security}/trades.csv");
+                let today = today.date_naive();
+                let file_name = &format!("{today}.csv");
+                match download(&download_type, &url, security, file_name).await {
+                    Ok(added) => {
+                        if added < 0 {
                             break;
                         }
+                        info!("{security} => {file_name}, count => {added}");
+                        thread::sleep(time::Duration::from_millis(500));
+                    }
+                    Err(e) => {
+                        error!("{}", e);
+                        break;
                     }
                 }
             }
