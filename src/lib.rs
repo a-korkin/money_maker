@@ -292,6 +292,9 @@ async fn insert_entity(pool: &PgPool, download_type: DownloadType, securities: &
             .to_str()
             .unwrap()
             .to_owned();
+        if !fs::exists(&path).expect(&format!("directory not exists: {}", &path)) {
+            continue;
+        }
         for entry in fs::read_dir(path).unwrap() {
             let file = entry.unwrap();
             let file_type = file.file_type().unwrap();
