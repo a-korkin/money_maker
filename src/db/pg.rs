@@ -1,4 +1,6 @@
-use crate::models::common::{Attempt, AvgPeriod, Candle, Frame, Operation, SecuritiesStr, ToSql};
+use crate::models::common::{
+    Attempt, AvgPeriod, Candle, Frame, Operation, SecuritiesStr, ToSql, Trade,
+};
 use chrono::NaiveDateTime;
 use dotenv;
 use sqlx::postgres::PgPool;
@@ -56,6 +58,54 @@ pub async fn add_candles(pool: &PgPool, security: &str, candles: &Vec<Candle>) -
         .await
         .expect("failed to insert candles");
     res.rows_affected()
+}
+
+pub async fn add_trades(pool: &PgPool, security: &str, trades: &Vec<Trade>) -> u64 {
+    // id uuid primary key not null default uuid_generate_v4(),
+    // trade_no int8 not null,
+    // security_id uuid not null references public.securities(id) on delete cascade,
+    // trade_datetime timestamp without time zone not null,
+    // price float4 not null default 0.0,
+    // quantity int4 not null default 0,
+    // value float4 not null default 0.0,
+    // buysell varchar(1) not null
+
+    let security_id: (Uuid,) = sqlx::query_as("select id from public.securities where code = $1")
+        .bind(security)
+        .fetch_one(pool)
+        .await
+        .expect("failed to get security id");
+    let trades_str = trades
+        .iter()
+        .take(5)
+        .map(|t| format!("('{}', {})", security_id.0, t.for_insert()))
+        .collect::<Vec<String>>()
+        .join(",\n");
+
+    // self.trade_no,
+    // self.trade_date,
+    // self.trade_time,
+    // self.price,
+    // self.quantity,
+    // self.value,
+    // self.buysell,
+    let sql = format!(
+        r#"
+    insert into public.trades(security_id, trade_no, trade_datetime, price, quantity, value, buysell)
+    values{}
+        "#,
+        trades_str
+    );
+
+    // let result = sqlx::query(&sql)
+    //     .execute(pool)
+    //     .await
+    //     .expect("failed to insert trades");
+    //
+    // result.rows_affected()
+
+    println!("sql: {sql}");
+    0u64
 }
 
 pub async fn get_securities_str(pool: &PgPool) -> String {

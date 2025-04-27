@@ -8,8 +8,7 @@ use chrono::prelude::*;
 use chrono::Duration;
 use clap::Parser;
 use csv;
-use db::pg;
-use db::pg::add_candles;
+use db::pg::{add_candles, add_securities, add_trades, get_all_securities, init_db};
 use dotenv;
 use log::{error, info};
 use models::common::{Candle, DateRange, Trade};
@@ -46,7 +45,7 @@ struct Args {
 
 pub async fn run() {
     logger::init().expect("failed to init logging");
-    let pool = pg::init_db().await;
+    let pool = init_db().await;
 
     let args = Args::parse();
     if args.terminal {
@@ -58,7 +57,7 @@ pub async fn run() {
     // return;
 
     let securities = match args.secs.as_str() {
-        "all" => pg::get_all_securities(&pool).await,
+        "all" => get_all_securities(&pool).await,
         _ => args
             .secs
             .split(",")
@@ -78,26 +77,36 @@ pub async fn run() {
         .expect("failed parse to DateTime")
         .and_time(NaiveTime::default());
 
-    match args.download.as_str() {
-        "c" | "candles" => fetch_data(&securities, DownloadType::Candles, start, end).await,
-        "t" | "trades" => {
-            fetch_data(&securities, DownloadType::Trades, start, end).await;
-            let path = &dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
-            let path = Path::new(path)
-                .join("trades")
-                .join("MOEX")
-                .join("2025-04-26.csv");
-            let trades = get_trades_from_csv(path.to_str().unwrap()).await;
-            for trade in trades {
-                println!("{:?}", trade);
-            }
-        }
-        _ => {}
-    }
+    let download_type = DownloadType::from(args.download.as_str());
+
+    // match download_type {
+    //     DownloadType::Candles => fetch_data(&securities, DownloadType::Candles, start, end).await,
+    //     DownloadType::Trades => {
+    //         fetch_data(&securities, DownloadType::Trades, start, end).await;
+    //         let path = &dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
+    //         let path = Path::new(path)
+    //             .join("trades")
+    //             .join("MOEX")
+    //             .join("2025-04-26.csv");
+    //         let trades = get_trades_from_csv(path.to_str().unwrap()).await;
+    //         for trade in trades {
+    //             println!("{:?}", trade);
+    //         }
+    //     }
+    // }
 
     if args.add {
-        pg::add_securities(&pool, &securities).await;
-        insert_candles(&pool, &securities).await;
+        add_securities(&pool, &securities).await;
+        insert_entity(&pool, download_type, &securities).await;
+        // let path = &dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
+        // let path = Path::new(path)
+        //     .join("trades")
+        //     .join("MOEX")
+        //     .join("2025-04-26.csv");
+        // let trades = get_trades_from_csv(path.to_str().unwrap()).await;
+        // add_trades(&pool, "MOEX", &trades).await;
+        // insert_entity(&pool)
+        // insert_candles(&pool, &securities).await;
     }
 }
 
@@ -115,6 +124,16 @@ impl ToString for DownloadType {
         match self {
             Self::Candles => String::from("candles"),
             Self::Trades => String::from("trades"),
+        }
+    }
+}
+
+impl From<&str> for DownloadType {
+    fn from(value: &str) -> Self {
+        match value {
+            "c" | "candles" => Self::Candles,
+            "t" | "trades" => Self::Trades,
+            _ => unimplemented!(),
         }
     }
 }
@@ -281,12 +300,68 @@ pub async fn get_trades_from_csv(path: &str) -> Vec<Trade> {
         .collect::<Vec<_>>()
 }
 
-pub async fn insert_candles(pool: &PgPool, securities: &Vec<String>) {
+// pub async fn insert_candles(pool: &PgPool, securities: &Vec<String>) {
+//     let start = Local::now().time();
+//     for security in securities {
+//         let data_dir = dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
+//         let path = Path::new(&data_dir)
+//             .join("candles")
+//             .join(security)
+//             .to_str()
+//             .unwrap()
+//             .to_owned();
+//         for entry in fs::read_dir(path).unwrap() {
+//             let file = entry.unwrap();
+//             let file_type = file.file_type().unwrap();
+//
+//             if file_type.is_file() {
+//                 let candles =
+//                     get_candles_from_csv(file.path().to_str().expect("failed to get filepath"))
+//                         .await;
+//                 let added = add_candles(pool, security, &candles).await;
+//                 let file_name = file.file_name().to_str().unwrap().to_owned();
+//                 info!("{security} => {file_name}, count => {added}");
+//             }
+//         }
+//     }
+//     let end = Local::now().time();
+//     info!("elapsed time: {}", elapsed_time(start, end));
+// }
+
+// pub async fn insert_trades(pool: &PgPool, securities: &Vec<String>) {
+//     let start = Local::now().time();
+//     for security in securities {
+//         let data_dir = dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
+//         let path = Path::new(&data_dir)
+//             .join("trades")
+//             .join(security)
+//             .to_str()
+//             .unwrap()
+//             .to_owned();
+//         for entry in fs::read_dir(path).unwrap() {
+//             let file = entry.unwrap();
+//             let file_type = file.file_type().unwrap();
+//
+//             if file_type.is_file() {
+//                 let trades =
+//                     get_trades_from_csv(file.path().to_str().expect("failed to get filepath"))
+//                         .await;
+//                 let added = add_trades(pool, security, &trades).await;
+//                 let file_name = file.file_name().to_str().unwrap().to_owned();
+//                 info!("{security} => {file_name}, count => {added}");
+//             }
+//         }
+//     }
+//     let end = Local::now().time();
+//     info!("elapsed time: {}", elapsed_time(start, end));
+// }
+
+async fn insert_entity(pool: &PgPool, download_type: DownloadType, securities: &Vec<String>) {
     let start = Local::now().time();
     for security in securities {
         let data_dir = dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
         let path = Path::new(&data_dir)
-            .join("candles")
+            .join(download_type.to_string())
             .join(security)
             .to_str()
             .unwrap()
@@ -296,12 +371,25 @@ pub async fn insert_candles(pool: &PgPool, securities: &Vec<String>) {
             let file_type = file.file_type().unwrap();
 
             if file_type.is_file() {
-                let candles =
-                    get_candles_from_csv(file.path().to_str().expect("failed to get filepath"))
-                        .await;
-                let added = add_candles(pool, security, &candles).await;
+                let mut added: u64 = 0;
                 let file_name = file.file_name().to_str().unwrap().to_owned();
-                info!("{security} => {file_name}, count => {added}");
+                match download_type {
+                    DownloadType::Candles => {
+                        let candles = get_candles_from_csv(
+                            file.path().to_str().expect("failed to get filepath"),
+                        )
+                        .await;
+                        added = add_candles(pool, security, &candles).await;
+                    }
+                    DownloadType::Trades => {
+                        let trades = get_trades_from_csv(
+                            file.path().to_str().expect("failed to get filepath"),
+                        )
+                        .await;
+                        added = add_trades(pool, security, &trades).await;
+                    }
+                }
+                info!("{} => {}, count => {}", security, file_name, added);
             }
         }
     }

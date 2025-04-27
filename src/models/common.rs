@@ -124,6 +124,21 @@ pub struct Trade {
     pub trade_session_date: NaiveDate,
 }
 
+impl ToSql for Trade {
+    fn for_insert(&self) -> String {
+        format!(
+            "{}, '{} {}', {}, {}, {}, '{}'",
+            self.trade_no,
+            self.trade_date,
+            self.trade_time,
+            self.price,
+            self.quantity,
+            self.value,
+            self.buysell,
+        )
+    }
+}
+
 pub struct DateRange(pub NaiveDateTime, pub NaiveDateTime);
 
 impl Iterator for DateRange {
