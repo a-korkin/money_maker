@@ -389,7 +389,13 @@ async fn insert_entity(pool: &PgPool, download_type: DownloadType, securities: &
                         added = add_trades(pool, security, &trades).await;
                     }
                 }
-                info!("{} => {}, count => {}", security, file_name, added);
+                info!(
+                    "{} => {}/{}, count => {}",
+                    security,
+                    download_type.to_string(),
+                    file_name,
+                    added
+                );
             }
         }
     }
