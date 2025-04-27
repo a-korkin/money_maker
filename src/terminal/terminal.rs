@@ -38,7 +38,7 @@ struct UiElements<'a> {
 }
 
 pub async fn run_terminal(pool: &PgPool) {
-    let mut begin = NaiveDate::from_ymd_opt(2025, 3, 10)
+    let mut begin = NaiveDate::from_ymd_opt(2025, 4, 25)
         .unwrap()
         .and_hms_opt(0, 0, 0)
         .unwrap();
@@ -83,6 +83,10 @@ pub async fn run_terminal(pool: &PgPool) {
         .build();
 
     rl.set_target_fps(60);
+    let font = rl
+        .load_font(&thread, "assets/fonts/SourceCodePro-Bold.ttf")
+        // .load_font(&thread, "assets/fonts/JetBrainsMono-Bold.ttf")
+        .expect("failed to load font");
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
 
@@ -172,7 +176,7 @@ pub async fn run_terminal(pool: &PgPool) {
             }
         }
 
-        draw_axis(&mut d, &coords);
+        draw_axis(&mut d, &font, &coords);
         draw_candles(&mut d, &coords, &candles, &Frame::from(current_frame));
     }
 }
@@ -217,7 +221,7 @@ async fn fetch_data<'a>(
     return (candles, coords);
 }
 
-fn draw_axis(d: &mut RaylibDrawHandle, coords: &DrawCoords) {
+fn draw_axis(d: &mut RaylibDrawHandle, font: &Font, coords: &DrawCoords) {
     let center = (coords.end_pos.x - coords.start_pos.x) / 2.0;
     // y-axis
     d.draw_line_v(
@@ -247,11 +251,11 @@ fn draw_axis(d: &mut RaylibDrawHandle, coords: &DrawCoords) {
             _ => 50.0,
         };
         d.draw_text_ex(
-            d.get_font_default(),
+            font, //d.get_font_default(),
             &format!("{:.2}", label),
             Vector2::new(coords.start_pos.x - offset, cur_y - 5_f32),
-            10.0,
-            1.0,
+            15.0,
+            0.0,
             Color::BLACK,
         );
         cur_y += step;

@@ -68,6 +68,7 @@ pub async fn add_trades(pool: &PgPool, security: &str, trades: &Vec<Trade>) -> u
         .expect("failed to get security id");
     let trades_str = trades
         .iter()
+        .filter(|a| a.board_id == "TQBR")
         .map(|t| format!("('{}', {})", sec.0, t.for_insert()))
         .collect::<Vec<String>>()
         .join(",\n");
