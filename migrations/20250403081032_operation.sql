@@ -1,4 +1,5 @@
-create table if not exists attempts (
+create table if not exists attempts 
+(
     id uuid primary key not null default uuid_generate_v4(),
     created_at timestamp without time zone not null default now(),
     profit decimal not null default 0

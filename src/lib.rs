@@ -249,6 +249,7 @@ pub async fn download(
         fs::create_dir_all(&path)?;
     }
     let file_path = Path::new(&path.to_str().unwrap()).join(file_name);
+    println!("file_path: {:?}", file_path);
     let mut file = fs::File::create(file_path)?;
     file.write_all(rows.join("\n").as_bytes())?;
 
@@ -285,6 +286,7 @@ pub async fn insert_candles(pool: &PgPool, securities: &Vec<String>) {
     for security in securities {
         let data_dir = dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
         let path = Path::new(&data_dir)
+            .join("candles")
             .join(security)
             .to_str()
             .unwrap()
