@@ -7,7 +7,6 @@ use raylib::prelude::GuiTextAlignment::*;
 use raylib::prelude::*;
 use regex::Regex;
 use sqlx::PgPool;
-use std::fmt::Debug;
 use std::time::Duration;
 
 const H: f32 = 640.0;
@@ -65,7 +64,7 @@ pub async fn run_terminal(pool: &PgPool) {
     .await;
 
     let b = NaiveDateTime::parse_from_str("2025-04-26 10:00:00", DATE_TIME_FMT).unwrap();
-    let trades = pg::get_trades(pool, selected_security, b, end).await;
+    let mut trades = pg::get_trades(pool, selected_security, b, end).await;
 
     // ui
     let alpha = 1.0;
@@ -90,7 +89,8 @@ pub async fn run_terminal(pool: &PgPool) {
     let font = rl
         .load_font(&thread, "assets/fonts/SourceCodePro-Bold.ttf")
         .expect("failed to load font");
-    let mut info = format!("{}\nopen: {}\nclose: {}", "datetime", 0.0, 0.0);
+    let mut info = String::from(""); //format!("{}\nopen: {}\nclose: {}", "datetime", 0.0, 0.0);
+    let mut current_candle = candles.first().unwrap().clone();
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
 
@@ -182,10 +182,18 @@ pub async fn run_terminal(pool: &PgPool) {
 
         draw_axis(&mut d, &font, &coords);
         draw_candles(&mut d, &coords, &mut candles, &Frame::from(current_frame));
-        draw_trades(&mut d, &font, &candles, &trades, &coords);
+        draw_trades(&mut d, &font, &trades);
 
         // mouse_hover(&mut d, &coords);
-        mouse_click(&mut d, &coords, &candles, &mut info);
+        if mouse_click(&mut d, &coords, &candles, &mut current_candle, &mut info) {
+            trades = pg::get_trades(
+                pool,
+                selected_security,
+                current_candle.begin,
+                current_candle.end,
+            )
+            .await;
+        }
         draw_info(&mut d, &coords, &font, &info);
     }
 }
@@ -627,13 +635,7 @@ fn draw_trade(d: &mut RaylibDrawHandle, rect: &Rectangle, font: &Font, trade: &T
     );
 }
 
-fn draw_trades(
-    d: &mut RaylibDrawHandle,
-    font: &Font,
-    candles: &Vec<Candle>,
-    trades: &Vec<TradeView>,
-    coords: &DrawCoords,
-) {
+fn draw_trades(d: &mut RaylibDrawHandle, font: &Font, trades: &Vec<TradeView>) {
     let rect = Rectangle::new(300.0, 300.0, 80.0, 120.0);
     d.draw_rectangle_lines_ex(rect, 1.0, Color::BLACK);
     let height = 20.0;
@@ -664,8 +666,9 @@ fn mouse_click(
     d: &mut RaylibDrawHandle,
     coords: &DrawCoords,
     candles: &Vec<Candle>,
+    current_candle: &mut Candle,
     info: &mut String,
-) {
+) -> bool {
     if d.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
         let mouse_position = d.get_mouse_position();
         if mouse_position.x >= coords.start_pos.x
@@ -677,11 +680,14 @@ fn mouse_click(
                 if mouse_position.x >= candle.position_x
                     && mouse_position.x <= candle.position_x + CANDLE_W
                 {
-                    *info = candle.to_string();
+                    *current_candle = candle.clone();
+                    *info = current_candle.to_string();
+                    return true;
                 }
             }
         }
     }
+    false
 }
 
 fn mouse_hover(d: &mut RaylibDrawHandle, coords: &DrawCoords) {
