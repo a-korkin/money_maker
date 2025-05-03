@@ -180,8 +180,8 @@ pub async fn run_terminal(pool: &PgPool) {
         }
 
         draw_axis(&mut d, &font, &coords);
-        draw_candles(&mut d, &coords, &candles, &Frame::from(current_frame));
-        draw_trades(&mut d, &font, &trades);
+        draw_candles(&mut d, &coords, &mut candles, &Frame::from(current_frame));
+        draw_trades(&mut d, &font, &candles, &trades, &coords);
     }
 }
 
@@ -304,12 +304,12 @@ fn convert_coords(start_pos: Vector2, step_y: f32, max_y: f32, in_value_y: f32) 
 fn draw_candles(
     d: &mut RaylibDrawHandle,
     coords: &DrawCoords,
-    candles: &Vec<Candle>,
+    candles: &mut Vec<Candle>,
     frame: &Frame,
 ) {
     let mut day: u32 = 0;
     let mut month: u32 = 0;
-    for (i, candle) in candles.iter().enumerate() {
+    for (i, candle) in candles.into_iter().enumerate() {
         let x = coords.start_pos.x + (i as f32 * CANDLE_W);
         draw_candle(
             d,
@@ -336,6 +336,37 @@ fn draw_candles(
             ),
         }
     }
+}
+
+fn draw_candle(
+    d: &mut RaylibDrawHandle,
+    candle: &mut Candle,
+    idx_pos: f32,
+    start_pos: Vector2,
+    step_y: f32,
+    max_y: f32,
+) {
+    let max = f32::max(candle.close, candle.open);
+    let min = f32::min(candle.close, candle.open);
+    let color = if candle.close >= candle.open {
+        Color::GREEN
+    } else {
+        Color::RED
+    };
+    let pos = Vector2::new(idx_pos, convert_coords(start_pos, step_y, max_y, max));
+    let size = Vector2::new(CANDLE_W, (max - min) * step_y);
+    d.draw_rectangle_v(pos, size, color);
+    candle.position_x = pos.x;
+    candle.position_y = pos.y;
+    let high = Vector2::new(
+        idx_pos + CANDLE_W / 2.0,
+        convert_coords(start_pos, step_y, max_y, candle.high),
+    );
+    let low = Vector2::new(
+        idx_pos + CANDLE_W / 2.0,
+        convert_coords(start_pos, step_y, max_y, candle.low),
+    );
+    d.draw_line_v(high, low, color);
 }
 
 fn draw_frames_m1(
@@ -449,35 +480,6 @@ fn draw_frames_h1(d: &mut RaylibDrawHandle, date: NaiveDateTime, day: &mut u32, 
             Color::BLACK,
         );
     }
-}
-
-fn draw_candle(
-    d: &mut RaylibDrawHandle,
-    candle: &Candle,
-    idx_pos: f32,
-    start_pos: Vector2,
-    step_y: f32,
-    max_y: f32,
-) {
-    let max = f32::max(candle.close, candle.open);
-    let min = f32::min(candle.close, candle.open);
-    let color = if candle.close >= candle.open {
-        Color::GREEN
-    } else {
-        Color::RED
-    };
-    let pos = Vector2::new(idx_pos, convert_coords(start_pos, step_y, max_y, max));
-    let size = Vector2::new(CANDLE_W, (max - min) * step_y);
-    d.draw_rectangle_v(pos, size, color);
-    let high = Vector2::new(
-        idx_pos + CANDLE_W / 2.0,
-        convert_coords(start_pos, step_y, max_y, candle.high),
-    );
-    let low = Vector2::new(
-        idx_pos + CANDLE_W / 2.0,
-        convert_coords(start_pos, step_y, max_y, candle.low),
-    );
-    d.draw_line_v(high, low, color);
 }
 
 #[allow(dead_code)]
@@ -620,9 +622,33 @@ fn draw_trade(d: &mut RaylibDrawHandle, rect: &Rectangle, font: &Font, trade: &T
     );
 }
 
-fn draw_trades(d: &mut RaylibDrawHandle, font: &Font, trades: &Vec<TradeView>) {
+fn draw_trades(
+    d: &mut RaylibDrawHandle,
+    font: &Font,
+    candles: &Vec<Candle>,
+    trades: &Vec<TradeView>,
+    coords: &DrawCoords,
+) {
     let rect = Rectangle::new(300.0, 300.0, 80.0, 120.0);
     d.draw_rectangle_lines_ex(rect, 1.0, Color::BLACK);
+
+    if d.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
+        let mouse_position = d.get_mouse_position();
+
+        if mouse_position.x >= coords.start_pos.x
+            && mouse_position.y >= coords.start_pos.y
+            && mouse_position.x <= coords.end_pos.x
+            && mouse_position.y <= coords.end_pos.y
+        {
+            for candle in candles {
+                if mouse_position.x >= candle.position_x
+                    && mouse_position.x <= candle.position_x + CANDLE_W
+                {
+                    println!("{:?}", candle);
+                }
+            }
+        }
+    }
 
     let height = 20.0;
     let mut current_y = 300.0;

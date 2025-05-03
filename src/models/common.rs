@@ -67,6 +67,10 @@ pub struct Candle {
     pub begin: NaiveDateTime,
     #[serde(with = "unix_timestamp")]
     pub end: NaiveDateTime,
+    #[sqlx(skip)]
+    pub position_x: f32,
+    #[sqlx(skip)]
+    pub position_y: f32,
 }
 
 pub trait ToSql {
