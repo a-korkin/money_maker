@@ -1,5 +1,5 @@
 use crate::db::pg;
-use crate::models::common::{Candle, Frame};
+use crate::models::common::{Candle, Frame, TradeView};
 use chrono::Datelike;
 use chrono::{NaiveDate, NaiveDateTime, Timelike};
 use raylib::prelude::GuiControlProperty::*;
@@ -9,7 +9,7 @@ use regex::Regex;
 use sqlx::PgPool;
 use std::time::Duration;
 
-const H: f32 = 320.0; //480.0;
+const H: f32 = 640.0;
 const W: f32 = 1280.0;
 const CANDLE_W: f32 = 12.0;
 const COUNT_Y: f32 = 10.0;
@@ -62,6 +62,9 @@ pub async fn run_terminal(pool: &PgPool) {
         &Frame::from(current_frame),
     )
     .await;
+
+    let b = NaiveDateTime::parse_from_str("2025-04-26 10:00:00", DATE_TIME_FMT).unwrap();
+    let trades = pg::get_trades(pool, selected_security, b, end).await;
 
     // ui
     let alpha = 1.0;
@@ -178,6 +181,7 @@ pub async fn run_terminal(pool: &PgPool) {
 
         draw_axis(&mut d, &font, &coords);
         draw_candles(&mut d, &coords, &candles, &Frame::from(current_frame));
+        draw_trades(&mut d, &font, &trades);
     }
 }
 
@@ -597,4 +601,38 @@ fn draw_dropdown(
         TEXT_ALIGN_CENTER as i32,
     );
     d.gui_dropdown_box(position, list, active, *edit)
+}
+
+fn draw_trade(d: &mut RaylibDrawHandle, rect: &Rectangle, font: &Font, trade: &TradeView) {
+    let color = match trade.buysell.to_uppercase().as_str() {
+        "B" => Color::GREEN,
+        "S" => Color::RED,
+        _ => Color::BLUE,
+    };
+    d.draw_rectangle_rec(rect, color);
+    d.draw_text_ex(
+        font,
+        &format!("{}: {}", trade.quantity, trade.price),
+        Vector2::new(rect.x + 2.0, rect.y + 2.0),
+        15.0,
+        0.0,
+        Color::BLACK,
+    );
+}
+
+fn draw_trades(d: &mut RaylibDrawHandle, font: &Font, trades: &Vec<TradeView>) {
+    let rect = Rectangle::new(300.0, 300.0, 80.0, 120.0);
+    d.draw_rectangle_lines_ex(rect, 1.0, Color::BLACK);
+
+    let height = 20.0;
+    let mut current_y = 300.0;
+    for trade in trades {
+        draw_trade(
+            d,
+            &Rectangle::new(300.0, current_y, 80.0, height),
+            font,
+            trade,
+        );
+        current_y += height;
+    }
 }

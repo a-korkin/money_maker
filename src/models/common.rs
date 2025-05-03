@@ -89,8 +89,7 @@ impl ToSql for Candle {
     }
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, sqlx::FromRow)]
 pub struct Trade {
     #[serde(rename = "TRADENO")]
     pub trade_no: i64,
@@ -107,13 +106,13 @@ pub struct Trade {
     #[serde(rename = "VALUE")]
     pub value: f32,
     #[serde(rename = "PERIOD")]
-    pub period: char,
+    pub period: i8,
     #[serde(rename = "TRADETIME_GRP")]
     pub tradetime_grp: i32,
     #[serde(with = "unix_timestamp", rename = "SYSTIME")]
     pub systime: NaiveDateTime,
     #[serde(rename = "BUYSELL")]
-    pub buysell: char,
+    pub buysell: i8,
     #[serde(rename = "DECIMALS")]
     pub decimals: i32,
     #[serde(rename = "TRADINGSESSION")]
@@ -137,6 +136,18 @@ impl ToSql for Trade {
             self.buysell,
         )
     }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, sqlx::FromRow)]
+pub struct TradeView {
+    pub trade_no: i64,
+    pub security_id: Uuid,
+    pub trade_datetime: NaiveDateTime,
+    pub price: f32,
+    pub quantity: i32,
+    pub value: f32,
+    pub buysell: String,
 }
 
 pub struct DateRange(pub NaiveDateTime, pub NaiveDateTime);

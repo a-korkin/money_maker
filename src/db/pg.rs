@@ -1,5 +1,5 @@
 use crate::models::common::{
-    Attempt, AvgPeriod, Candle, Frame, Operation, SecuritiesStr, ToSql, Trade,
+    Attempt, AvgPeriod, Candle, Frame, Operation, SecuritiesStr, ToSql, Trade, TradeView,
 };
 use chrono::NaiveDateTime;
 use dotenv;
@@ -87,6 +87,33 @@ pub async fn add_trades(pool: &PgPool, security: &str, trades: &Vec<Trade>) -> u
         .expect("failed to insert trades");
 
     result.rows_affected()
+}
+
+pub async fn get_trades(
+    pool: &PgPool,
+    security: &str,
+    begin: NaiveDateTime,
+    end: NaiveDateTime,
+) -> Vec<TradeView> {
+    let sql = r#"
+    select t.trade_no, t.security_id, t.trade_datetime, t.price, t.quantity, t.value, t.buysell 
+    from public.trades as t
+    inner join public.securities as s on s.id = t.security_id
+    where s.code = $1
+        and trade_datetime >= $2
+        and trade_datetime <= $3
+    order by trade_datetime
+    limit 15;
+        "#;
+    let result: Vec<TradeView> = sqlx::query_as(sql)
+        .bind(security)
+        .bind(begin)
+        .bind(end)
+        .fetch_all(pool)
+        .await
+        .expect("failed to fetch trades");
+
+    result
 }
 
 pub async fn get_securities_str(pool: &PgPool) -> String {
