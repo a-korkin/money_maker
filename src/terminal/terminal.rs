@@ -7,6 +7,7 @@ use raylib::prelude::GuiTextAlignment::*;
 use raylib::prelude::*;
 use regex::Regex;
 use sqlx::PgPool;
+use std::fmt::Debug;
 use std::time::Duration;
 
 const H: f32 = 640.0;
@@ -88,8 +89,8 @@ pub async fn run_terminal(pool: &PgPool) {
     rl.set_target_fps(60);
     let font = rl
         .load_font(&thread, "assets/fonts/SourceCodePro-Bold.ttf")
-        // .load_font(&thread, "assets/fonts/JetBrainsMono-Bold.ttf")
         .expect("failed to load font");
+    let mut info = format!("{}\nopen: {}\nclose: {}", "datetime", 0.0, 0.0);
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
 
@@ -182,6 +183,10 @@ pub async fn run_terminal(pool: &PgPool) {
         draw_axis(&mut d, &font, &coords);
         draw_candles(&mut d, &coords, &mut candles, &Frame::from(current_frame));
         draw_trades(&mut d, &font, &candles, &trades, &coords);
+
+        // mouse_hover(&mut d, &coords);
+        mouse_click(&mut d, &coords, &candles, &mut info);
+        draw_info(&mut d, &coords, &font, &info);
     }
 }
 
@@ -631,25 +636,6 @@ fn draw_trades(
 ) {
     let rect = Rectangle::new(300.0, 300.0, 80.0, 120.0);
     d.draw_rectangle_lines_ex(rect, 1.0, Color::BLACK);
-
-    if d.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
-        let mouse_position = d.get_mouse_position();
-
-        if mouse_position.x >= coords.start_pos.x
-            && mouse_position.y >= coords.start_pos.y
-            && mouse_position.x <= coords.end_pos.x
-            && mouse_position.y <= coords.end_pos.y
-        {
-            for candle in candles {
-                if mouse_position.x >= candle.position_x
-                    && mouse_position.x <= candle.position_x + CANDLE_W
-                {
-                    println!("{:?}", candle);
-                }
-            }
-        }
-    }
-
     let height = 20.0;
     let mut current_y = 300.0;
     for trade in trades {
@@ -660,5 +646,51 @@ fn draw_trades(
             trade,
         );
         current_y += height;
+    }
+}
+
+fn draw_info(d: &mut RaylibDrawHandle, coords: &DrawCoords, font: &Font, info: &str) {
+    d.draw_text_ex(
+        font,
+        info,
+        Vector2::new(coords.end_pos.x - 130.0, coords.start_pos.y),
+        15.0,
+        0.0,
+        Color::BLACK,
+    );
+}
+
+fn mouse_click(
+    d: &mut RaylibDrawHandle,
+    coords: &DrawCoords,
+    candles: &Vec<Candle>,
+    info: &mut String,
+) {
+    if d.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
+        let mouse_position = d.get_mouse_position();
+        if mouse_position.x >= coords.start_pos.x
+            && mouse_position.y >= coords.start_pos.y
+            && mouse_position.x <= coords.end_pos.x
+            && mouse_position.y <= coords.end_pos.y
+        {
+            for candle in candles {
+                if mouse_position.x >= candle.position_x
+                    && mouse_position.x <= candle.position_x + CANDLE_W
+                {
+                    *info = candle.to_string();
+                }
+            }
+        }
+    }
+}
+
+fn mouse_hover(d: &mut RaylibDrawHandle, coords: &DrawCoords) {
+    let mouse_position = d.get_mouse_position();
+    if mouse_position.x >= coords.start_pos.x
+        && mouse_position.y >= coords.start_pos.y
+        && mouse_position.x <= coords.end_pos.x
+        && mouse_position.y <= coords.end_pos.y
+    {
+        println!("in candles");
     }
 }

@@ -73,6 +73,16 @@ pub struct Candle {
     pub position_y: f32,
 }
 
+impl std::fmt::Display for Candle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\nopen: {:.2}\nclose: {:.2}",
+            self.begin, self.open, self.close
+        )
+    }
+}
+
 pub trait ToSql {
     fn for_insert(&self) -> String;
 }
