@@ -39,10 +39,8 @@ struct UiElements<'a> {
 }
 
 pub async fn run_terminal(pool: &PgPool) {
-    let mut begin = NaiveDate::from_ymd_opt(2025, 4, 26)
-        .unwrap()
-        .and_hms_opt(0, 0, 0)
-        .unwrap();
+    let mut begin = NaiveDateTime::parse_from_str("2025-04-26 10:00:00", DATE_TIME_FMT)
+        .expect("failed to convernt datetime");
     let mut end = begin + Duration::from_secs(60 * 60 * 24 * 10);
 
     let securities = pg::get_securities_str(pool).await;
@@ -64,8 +62,14 @@ pub async fn run_terminal(pool: &PgPool) {
     )
     .await;
 
-    let b = NaiveDateTime::parse_from_str("2025-04-26 10:00:00", DATE_TIME_FMT).unwrap();
-    let mut trades = pg::get_trades(pool, selected_security, b, end).await;
+    let mut trades = pg::get_trades_view(
+        pool,
+        selected_security,
+        begin,
+        end,
+        &Frame::from(current_frame),
+    )
+    .await;
 
     // ui
     let alpha = 1.0;
@@ -205,11 +209,12 @@ pub async fn run_terminal(pool: &PgPool) {
 
         // mouse_hover(&mut d, &coords);
         if mouse_click(&mut d, &coords, &candles, &mut current_candle, &mut info) {
-            trades = pg::get_trades(
+            trades = pg::get_trades_view(
                 pool,
                 selected_security,
                 current_candle.begin,
                 current_candle.end,
+                &Frame::from(current_frame),
             )
             .await;
         }

@@ -89,23 +89,44 @@ pub async fn add_trades(pool: &PgPool, security: &str, trades: &Vec<Trade>) -> u
     result.rows_affected()
 }
 
-pub async fn get_trades(
+pub async fn get_trades_view(
     pool: &PgPool,
     security: &str,
     begin: NaiveDateTime,
     end: NaiveDateTime,
+    frame: &Frame,
 ) -> Vec<TradeView> {
     let sql = r#"
-    select t.trade_no, t.security_id, t.trade_datetime, t.price, t.quantity, t.value, t.buysell 
-    from public.trades as t
-    inner join public.securities as s on s.id = t.security_id
-    where s.code = $1
-        and trade_datetime >= $2
-        and trade_datetime <= $3
-    order by trade_datetime
-    limit 15;
+    select 
+        a.trade_minute, a.buysell, 
+        sum(a.price) as price_all, sum(a.quantity) as quantity_all, sum(a.value) as value_all,
+        coalesce(sum(a.price) filter (where a.buysell = 'B'), 0.0) as price_buy, 
+        coalesce(sum(a.quantity) filter (where a.buysell = 'B'), 0) as quantity_buy, 
+        coalesce(sum(a.value) filter (where a.buysell = 'B'), 0.0) as value_buy,
+        coalesce(sum(a.price) filter (where a.buysell = 'S'), 0.0) as price_sell, 
+        coalesce(sum(a.quantity) filter (where a.buysell = 'S'), 0) as quantity_sell, 
+        coalesce(sum(a.value) filter (where a.buysell = 'S'), 0.0) as value_sell
+    from 
+    (
+        select 
+            date_bin('$1', t.trade_datetime, t.trade_datetime::date) as trade_minute,
+            t.price, t.quantity, t.value, t.buysell
+        from public.trades as t
+        inner join public.securities as s on s.id = t.security_id
+        where s.code = $2
+            and trade_datetime >= $3
+            and trade_datetime <= $4
+    ) as a
+    group by a.trade_minute, a.buysell
+    order by a.trade_minute;
         "#;
+    let frame_str = match frame {
+        Frame::M1 => "1 min",
+        Frame::H1 => "1 hour",
+        Frame::D1 => "1 day",
+    };
     let result: Vec<TradeView> = sqlx::query_as(sql)
+        .bind(frame_str)
         .bind(security)
         .bind(begin)
         .bind(end)
