@@ -14,6 +14,7 @@ const W: f32 = 1280.0;
 const CANDLE_W: f32 = 12.0;
 const COUNT_Y: f32 = 10.0;
 const DATE_TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
+const TRADES_DELTA_Y: f32 = 300.0;
 
 #[allow(dead_code)]
 struct DrawCoords {
@@ -38,7 +39,7 @@ struct UiElements<'a> {
 }
 
 pub async fn run_terminal(pool: &PgPool) {
-    let mut begin = NaiveDate::from_ymd_opt(2025, 4, 25)
+    let mut begin = NaiveDate::from_ymd_opt(2025, 4, 26)
         .unwrap()
         .and_hms_opt(0, 0, 0)
         .unwrap();
@@ -50,7 +51,7 @@ pub async fn run_terminal(pool: &PgPool) {
 
     let frames_str = "m1;h1;d1";
     let frames = &frames_str.split(";").collect::<Vec<&str>>();
-    let mut frame_active: i32 = 1;
+    let mut frame_active: i32 = 0;
     let mut current_frame = frames[frame_active as usize];
     let mut frame_edit: bool = false;
 
@@ -86,11 +87,13 @@ pub async fn run_terminal(pool: &PgPool) {
         .build();
 
     rl.set_target_fps(60);
+
     let font = rl
         .load_font(&thread, "assets/fonts/SourceCodePro-Bold.ttf")
         .expect("failed to load font");
-    let mut info = String::from(""); //format!("{}\nopen: {}\nclose: {}", "datetime", 0.0, 0.0);
+    let mut info = String::from("");
     let mut current_candle = candles.first().unwrap().clone();
+
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
 
@@ -180,9 +183,25 @@ pub async fn run_terminal(pool: &PgPool) {
             }
         }
 
+        // candles
         draw_axis(&mut d, &font, &coords);
-        draw_candles(&mut d, &coords, &mut candles, &Frame::from(current_frame));
-        draw_trades(&mut d, &font, &trades);
+        draw_graphs(
+            &mut d,
+            &coords,
+            &mut candles,
+            &Frame::from(current_frame),
+            GraphType::Candles,
+        );
+
+        // trades
+        draw_trades(
+            &mut d,
+            &font,
+            &mut candles,
+            &trades,
+            &coords,
+            &Frame::from(current_frame),
+        );
 
         // mouse_hover(&mut d, &coords);
         if mouse_click(&mut d, &coords, &candles, &mut current_candle, &mut info) {
@@ -314,39 +333,47 @@ fn convert_coords(start_pos: Vector2, step_y: f32, max_y: f32, in_value_y: f32) 
     (max_y - in_value_y) * step_y + start_pos.y
 }
 
-fn draw_candles(
+enum GraphType {
+    Candles,
+    Trades,
+}
+
+fn draw_graphs(
     d: &mut RaylibDrawHandle,
     coords: &DrawCoords,
     candles: &mut Vec<Candle>,
     frame: &Frame,
+    graph_type: GraphType,
 ) {
+    let y = match graph_type {
+        GraphType::Candles => coords.end_pos.y,
+        GraphType::Trades => coords.end_pos.y + TRADES_DELTA_Y,
+    };
+
     let mut day: u32 = 0;
     let mut month: u32 = 0;
+
     for (i, candle) in candles.into_iter().enumerate() {
         let x = coords.start_pos.x + (i as f32 * CANDLE_W);
-        draw_candle(
-            d,
-            candle,
-            x + CANDLE_W,
-            coords.start_pos,
-            coords.step_y,
-            coords.max_y,
-        );
+        match graph_type {
+            GraphType::Candles => {
+                draw_candle(
+                    d,
+                    candle,
+                    x + CANDLE_W,
+                    coords.start_pos,
+                    coords.step_y,
+                    coords.max_y,
+                );
+            }
+            GraphType::Trades => {}
+        }
 
         // print time labels on x-axis
         match frame {
-            Frame::M1 => {
-                draw_frames_m1(d, candle.begin, &mut day, Vector2::new(x, coords.end_pos.y))
-            }
-            Frame::H1 => {
-                draw_frames_h1(d, candle.begin, &mut day, Vector2::new(x, coords.end_pos.y))
-            }
-            Frame::D1 => draw_frame_d1(
-                d,
-                candle.begin,
-                &mut month,
-                Vector2::new(x, coords.end_pos.y),
-            ),
+            Frame::M1 => draw_frames_m1(d, candle.begin, &mut day, Vector2::new(x, y)),
+            Frame::H1 => draw_frames_h1(d, candle.begin, &mut day, Vector2::new(x, y)),
+            Frame::D1 => draw_frame_d1(d, candle.begin, &mut month, Vector2::new(x, y)),
         }
     }
 }
@@ -619,36 +646,79 @@ fn draw_dropdown(
 }
 
 fn draw_trade(d: &mut RaylibDrawHandle, rect: &Rectangle, font: &Font, trade: &TradeView) {
-    let color = match trade.buysell.to_uppercase().as_str() {
-        "B" => Color::GREEN,
-        "S" => Color::RED,
-        _ => Color::BLUE,
-    };
-    d.draw_rectangle_rec(rect, color);
-    d.draw_text_ex(
-        font,
-        &format!("{}: {}", trade.quantity, trade.price),
-        Vector2::new(rect.x + 2.0, rect.y + 2.0),
-        15.0,
-        0.0,
-        Color::BLACK,
-    );
+    // #first
+    // let color = match trade.buysell.to_uppercase().as_str() {
+    //     "B" => Color::GREEN,
+    //     "S" => Color::RED,
+    //     _ => Color::BLUE,
+    // };
+    // d.draw_rectangle_rec(rect, color);
+    // d.draw_text_ex(
+    //     font,
+    //     &format!("{}: {}", trade.quantity, trade.price),
+    //     Vector2::new(rect.x + 2.0, rect.y + 2.0),
+    //     15.0,
+    //     0.0,
+    //     Color::BLACK,
+    // );
 }
 
-fn draw_trades(d: &mut RaylibDrawHandle, font: &Font, trades: &Vec<TradeView>) {
-    let rect = Rectangle::new(300.0, 300.0, 80.0, 120.0);
-    d.draw_rectangle_lines_ex(rect, 1.0, Color::BLACK);
-    let height = 20.0;
-    let mut current_y = 300.0;
-    for trade in trades {
-        draw_trade(
-            d,
-            &Rectangle::new(300.0, current_y, 80.0, height),
-            font,
-            trade,
+fn draw_trades(
+    d: &mut RaylibDrawHandle,
+    font: &Font,
+    candles: &mut Vec<Candle>,
+    trades: &Vec<TradeView>,
+    coords: &DrawCoords,
+    frame: &Frame,
+) {
+    // #first
+    // let rect = Rectangle::new(300.0, 300.0, 80.0, 120.0);
+    // d.draw_rectangle_lines_ex(rect, 1.0, Color::BLACK);
+    // let height = 20.0;
+    // let mut current_y = 300.0;
+    // for trade in trades {
+    //     draw_trade(
+    //         d,
+    //         &Rectangle::new(300.0, current_y, 80.0, height),
+    //         font,
+    //         trade,
+    //     );
+    //     current_y += height;
+    // }
+
+    // draw x-axis
+    let center = (coords.end_pos.x - coords.start_pos.x) / 2.0;
+    let end_y = coords.end_pos.y + TRADES_DELTA_Y;
+    d.draw_line_v(
+        Vector2::new(coords.start_pos.x, end_y),
+        Vector2::new(coords.end_pos.x, end_y),
+        Color::BLACK,
+    );
+
+    let mut right = center;
+    let mut left = center;
+    let mut i = 0;
+    while right <= coords.end_pos.x {
+        let scale = if i % 4 == 0 { 5_f32 } else { 3_f32 };
+        d.draw_line_v(
+            Vector2::new(right, end_y + scale),
+            Vector2::new(right, end_y - scale),
+            Color::BLACK,
         );
-        current_y += height;
+        if left >= coords.start_pos.x {
+            d.draw_line_v(
+                Vector2::new(left, end_y + scale),
+                Vector2::new(left, end_y - scale),
+                Color::BLACK,
+            );
+        }
+
+        right += CANDLE_W;
+        left -= CANDLE_W;
+        i += 1;
     }
+
+    draw_graphs(d, &coords, candles, frame, GraphType::Trades);
 }
 
 fn draw_info(d: &mut RaylibDrawHandle, coords: &DrawCoords, font: &Font, info: &str) {
