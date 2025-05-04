@@ -98,7 +98,7 @@ pub async fn get_trades_view(
 ) -> Vec<TradeView> {
     let sql = r#"
     select 
-        a.trade_minute, a.buysell, 
+        a.trade_period, a.buysell, 
         sum(a.price) as price_all, sum(a.quantity) as quantity_all, sum(a.value) as value_all,
         coalesce(sum(a.price) filter (where a.buysell = 'B'), 0.0) as price_buy, 
         coalesce(sum(a.quantity) filter (where a.buysell = 'B'), 0) as quantity_buy, 
@@ -109,7 +109,7 @@ pub async fn get_trades_view(
     from 
     (
         select 
-            date_bin('$1', t.trade_datetime, t.trade_datetime::date) as trade_minute,
+            date_bin('$1', t.trade_datetime, t.trade_datetime::date) as trade_period,
             t.price, t.quantity, t.value, t.buysell
         from public.trades as t
         inner join public.securities as s on s.id = t.security_id
@@ -117,8 +117,8 @@ pub async fn get_trades_view(
             and trade_datetime >= $3
             and trade_datetime <= $4
     ) as a
-    group by a.trade_minute, a.buysell
-    order by a.trade_minute;
+    group by a.trade_period, a.buysell
+    order by a.trade_period;
         "#;
     let frame_str = match frame {
         Frame::M1 => "1 min",

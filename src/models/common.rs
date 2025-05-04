@@ -155,7 +155,7 @@ impl ToSql for Trade {
 #[allow(dead_code)]
 #[derive(Debug, sqlx::FromRow)]
 pub struct TradeView {
-    pub trade_minute: NaiveDateTime,
+    pub trade_period: NaiveDateTime,
     pub buysell: String,
     pub price_all: f32,
     pub quantity_all: i64,
