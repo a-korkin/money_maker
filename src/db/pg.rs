@@ -96,17 +96,26 @@ pub async fn get_trades_view(
     end: NaiveDateTime,
     frame: &Frame,
 ) -> Vec<TradeView> {
-    let sql = r#"
+    let join_str = match frame {
+        Frame::M1 => "a.trade_period = b",
+        Frame::H1 => "a.trade_period = b",
+        Frame::D1 => "a.trade_period::date = b::date",
+    };
+    let sql = format!(
+        r#"
     select 
-        a.trade_period, a.buysell, 
-        sum(a.price) as price_all, sum(a.quantity) as quantity_all, sum(a.value) as value_all,
+        b as trade_period, coalesce(a.buysell, 'N') as buysell, 
+        coalesce(sum(a.price), 0.0) as price_all, 
+        coalesce(sum(a.quantity), 0) as quantity_all, 
+        coalesce(sum(a.value), 0.0) as value_all,
         coalesce(sum(a.price) filter (where a.buysell = 'B'), 0.0) as price_buy, 
         coalesce(sum(a.quantity) filter (where a.buysell = 'B'), 0) as quantity_buy, 
         coalesce(sum(a.value) filter (where a.buysell = 'B'), 0.0) as value_buy,
         coalesce(sum(a.price) filter (where a.buysell = 'S'), 0.0) as price_sell, 
         coalesce(sum(a.quantity) filter (where a.buysell = 'S'), 0) as quantity_sell, 
         coalesce(sum(a.value) filter (where a.buysell = 'S'), 0.0) as value_sell
-    from 
+    from generate_series($3, $4, '$1'::interval) as b
+    left join
     (
         select 
             date_bin('$1', t.trade_datetime, t.trade_datetime::date) as trade_period,
@@ -116,16 +125,21 @@ pub async fn get_trades_view(
         where s.code = $2
             and trade_datetime >= $3
             and trade_datetime <= $4
-    ) as a
-    group by a.trade_period, a.buysell
-    order by a.trade_period;
-        "#;
+    ) as a on {}
+    group by b, a.buysell
+    order by b;
+        "#,
+        join_str
+    );
+
+    // println!("{}", sql);
+
     let frame_str = match frame {
         Frame::M1 => "1 min",
         Frame::H1 => "1 hour",
         Frame::D1 => "1 day",
     };
-    let result: Vec<TradeView> = sqlx::query_as(sql)
+    let result: Vec<TradeView> = sqlx::query_as(&sql)
         .bind(frame_str)
         .bind(security)
         .bind(begin)

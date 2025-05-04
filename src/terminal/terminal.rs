@@ -7,6 +7,7 @@ use raylib::prelude::GuiTextAlignment::*;
 use raylib::prelude::*;
 use regex::Regex;
 use sqlx::PgPool;
+use std::i64;
 use std::time::Duration;
 
 const H: f32 = 640.0;
@@ -41,7 +42,7 @@ struct UiElements<'a> {
 pub async fn run_terminal(pool: &PgPool) {
     let mut begin = NaiveDateTime::parse_from_str("2025-04-26 10:00:00", DATE_TIME_FMT)
         .expect("failed to convernt datetime");
-    let mut end = begin + Duration::from_secs(60 * 60 * 24 * 10);
+    let mut end = begin + Duration::from_secs(60 * 60 * 24 * 1);
 
     let securities = pg::get_securities_str(pool).await;
     let secs: Vec<&str> = securities.split(";").collect();
@@ -193,6 +194,7 @@ pub async fn run_terminal(pool: &PgPool) {
             &mut d,
             &coords,
             &mut candles,
+            &trades,
             &Frame::from(current_frame),
             GraphType::Candles,
         );
@@ -207,7 +209,6 @@ pub async fn run_terminal(pool: &PgPool) {
             &Frame::from(current_frame),
         );
 
-        // mouse_hover(&mut d, &coords);
         if mouse_click(&mut d, &coords, &candles, &mut current_candle, &mut info) {
             trades = pg::get_trades_view(
                 pool,
@@ -218,6 +219,7 @@ pub async fn run_terminal(pool: &PgPool) {
             )
             .await;
         }
+
         draw_info(&mut d, &coords, &font, &info);
     }
 }
@@ -347,6 +349,7 @@ fn draw_graphs(
     d: &mut RaylibDrawHandle,
     coords: &DrawCoords,
     candles: &mut Vec<Candle>,
+    trades: &Vec<TradeView>,
     frame: &Frame,
     graph_type: GraphType,
 ) {
@@ -371,7 +374,9 @@ fn draw_graphs(
                     coords.max_y,
                 );
             }
-            GraphType::Trades => {}
+            GraphType::Trades => {
+                println!("trades: {}", trades.len());
+            }
         }
 
         // print time labels on x-axis
@@ -413,6 +418,8 @@ fn draw_candle(
     );
     d.draw_line_v(high, low, color);
 }
+
+fn draw_trade(d: &mut RaylibDrawHandle, trade_view: TradeView) {}
 
 fn draw_frames_m1(
     d: &mut RaylibDrawHandle,
@@ -650,24 +657,6 @@ fn draw_dropdown(
     d.gui_dropdown_box(position, list, active, *edit)
 }
 
-fn draw_trade(d: &mut RaylibDrawHandle, rect: &Rectangle, font: &Font, trade: &TradeView) {
-    // #first
-    // let color = match trade.buysell.to_uppercase().as_str() {
-    //     "B" => Color::GREEN,
-    //     "S" => Color::RED,
-    //     _ => Color::BLUE,
-    // };
-    // d.draw_rectangle_rec(rect, color);
-    // d.draw_text_ex(
-    //     font,
-    //     &format!("{}: {}", trade.quantity, trade.price),
-    //     Vector2::new(rect.x + 2.0, rect.y + 2.0),
-    //     15.0,
-    //     0.0,
-    //     Color::BLACK,
-    // );
-}
-
 fn draw_trades(
     d: &mut RaylibDrawHandle,
     font: &Font,
@@ -676,24 +665,64 @@ fn draw_trades(
     coords: &DrawCoords,
     frame: &Frame,
 ) {
-    // #first
-    // let rect = Rectangle::new(300.0, 300.0, 80.0, 120.0);
-    // d.draw_rectangle_lines_ex(rect, 1.0, Color::BLACK);
-    // let height = 20.0;
-    // let mut current_y = 300.0;
-    // for trade in trades {
-    //     draw_trade(
-    //         d,
-    //         &Rectangle::new(300.0, current_y, 80.0, height),
-    //         font,
-    //         trade,
-    //     );
-    //     current_y += height;
-    // }
+    let end_y = coords.end_pos.y + TRADES_DELTA_Y;
+    let start_y = coords.start_pos.y + TRADES_DELTA_Y;
+    let mut min_y = i64::MAX;
+    let mut max_y = 0_i64;
+
+    for trade in trades.iter().take(candles.len()) {
+        let min = i64::min(trade.quantity_buy, trade.quantity_sell);
+        let max = i64::max(trade.quantity_buy, trade.quantity_sell);
+
+        if min < min_y {
+            min_y = min;
+        }
+        if max > max_y {
+            max_y = max;
+        }
+    }
+
+    // draw y-axis
+    d.draw_line_v(
+        Vector2::new(coords.start_pos.x, start_y),
+        Vector2::new(coords.start_pos.x, end_y + 1_f32),
+        Color::BLACK,
+    );
+
+    let mut cur_y = start_y;
+    let step = (end_y - start_y) / COUNT_Y;
+    let add = ((max_y as f64 - min_y as f64) / 10.0) as i64;
+    let mut label: i64 = max_y;
+    while cur_y <= end_y {
+        d.draw_line_v(
+            Vector2::new(coords.start_pos.x, cur_y),
+            Vector2::new(coords.start_pos.x + 5_f32, cur_y),
+            Color::BLACK,
+        );
+        d.draw_line_v(
+            Vector2::new(coords.start_pos.x, cur_y),
+            Vector2::new(coords.start_pos.x - 6_f32, cur_y),
+            Color::BLACK,
+        );
+        let offset = match label {
+            0..1000 => 40.0,
+            1000..10_000 => 45.0,
+            _ => 50.0,
+        };
+        d.draw_text_ex(
+            font,
+            &format!("{:.2}", label),
+            Vector2::new(coords.start_pos.x - offset, cur_y - 5_f32),
+            15.0,
+            0.0,
+            Color::BLACK,
+        );
+        cur_y += step;
+        label -= add;
+    }
 
     // draw x-axis
     let center = (coords.end_pos.x - coords.start_pos.x) / 2.0;
-    let end_y = coords.end_pos.y + TRADES_DELTA_Y;
     d.draw_line_v(
         Vector2::new(coords.start_pos.x, end_y),
         Vector2::new(coords.end_pos.x, end_y),
@@ -723,7 +752,7 @@ fn draw_trades(
         i += 1;
     }
 
-    draw_graphs(d, &coords, candles, frame, GraphType::Trades);
+    draw_graphs(d, &coords, candles, trades, frame, GraphType::Trades);
 }
 
 fn draw_info(d: &mut RaylibDrawHandle, coords: &DrawCoords, font: &Font, info: &str) {
@@ -763,15 +792,4 @@ fn mouse_click(
         }
     }
     false
-}
-
-fn mouse_hover(d: &mut RaylibDrawHandle, coords: &DrawCoords) {
-    let mouse_position = d.get_mouse_position();
-    if mouse_position.x >= coords.start_pos.x
-        && mouse_position.y >= coords.start_pos.y
-        && mouse_position.x <= coords.end_pos.x
-        && mouse_position.y <= coords.end_pos.y
-    {
-        println!("in candles");
-    }
 }
