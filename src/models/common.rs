@@ -28,6 +28,7 @@ impl Into<String> for SecuritiesStr {
     }
 }
 
+#[derive(Debug)]
 pub enum Frame {
     M1,
     H1,

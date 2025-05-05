@@ -41,7 +41,7 @@ struct UiElements<'a> {
 
 pub async fn run_terminal(pool: &PgPool) {
     let mut begin = NaiveDateTime::parse_from_str("2025-04-26 10:00:00", DATE_TIME_FMT)
-        .expect("failed to convernt datetime");
+        .expect("failed to convert datetime");
     let mut end = begin + Duration::from_secs(60 * 60 * 24 * 1);
 
     let securities = pg::get_securities_str(pool).await;
@@ -69,8 +69,11 @@ pub async fn run_terminal(pool: &PgPool) {
         begin,
         end,
         &Frame::from(current_frame),
+        candles.len() as i32,
     )
     .await;
+
+    println!("{:#?}", trades);
 
     // ui
     let alpha = 1.0;
@@ -210,14 +213,14 @@ pub async fn run_terminal(pool: &PgPool) {
         );
 
         if mouse_click(&mut d, &coords, &candles, &mut current_candle, &mut info) {
-            trades = pg::get_trades_view(
-                pool,
-                selected_security,
-                current_candle.begin,
-                current_candle.end,
-                &Frame::from(current_frame),
-            )
-            .await;
+            // trades = pg::get_trades_view(
+            //     pool,
+            //     selected_security,
+            //     current_candle.begin,
+            //     current_candle.end,
+            //     &Frame::from(current_frame),
+            // )
+            // .await;
         }
 
         draw_info(&mut d, &coords, &font, &info);
@@ -336,8 +339,8 @@ fn draw_axis(d: &mut RaylibDrawHandle, font: &Font, coords: &DrawCoords) {
     }
 }
 
-fn convert_coords(start_pos: Vector2, step_y: f32, max_y: f32, in_value_y: f32) -> f32 {
-    (max_y - in_value_y) * step_y + start_pos.y
+fn convert_coords_y(start_pos: f32, step: f32, max: f32, in_value: f32) -> f32 {
+    (max - in_value) * step + start_pos
 }
 
 enum GraphType {
@@ -403,23 +406,21 @@ fn draw_candle(
     } else {
         Color::RED
     };
-    let pos = Vector2::new(idx_pos, convert_coords(start_pos, step_y, max_y, max));
+    let pos = Vector2::new(idx_pos, convert_coords_y(start_pos.y, step_y, max_y, max));
     let size = Vector2::new(CANDLE_W, (max - min) * step_y);
     d.draw_rectangle_v(pos, size, color);
     candle.position_x = pos.x;
     candle.position_y = pos.y;
     let high = Vector2::new(
         idx_pos + CANDLE_W / 2.0,
-        convert_coords(start_pos, step_y, max_y, candle.high),
+        convert_coords_y(start_pos.y, step_y, max_y, candle.high),
     );
     let low = Vector2::new(
         idx_pos + CANDLE_W / 2.0,
-        convert_coords(start_pos, step_y, max_y, candle.low),
+        convert_coords_y(start_pos.y, step_y, max_y, candle.low),
     );
     d.draw_line_v(high, low, color);
 }
-
-fn draw_trade(d: &mut RaylibDrawHandle, trade_view: TradeView) {}
 
 fn draw_frames_m1(
     d: &mut RaylibDrawHandle,
@@ -670,7 +671,7 @@ fn draw_trades(
     let mut min_y = i64::MAX;
     let mut max_y = 0_i64;
 
-    for trade in trades.iter().take(candles.len()) {
+    for trade in trades {
         let min = i64::min(trade.quantity_buy, trade.quantity_sell);
         let max = i64::max(trade.quantity_buy, trade.quantity_sell);
 
@@ -752,7 +753,30 @@ fn draw_trades(
         i += 1;
     }
 
-    draw_graphs(d, &coords, candles, trades, frame, GraphType::Trades);
+    // draw_graphs(d, &coords, candles, trades, frame, GraphType::Trades);
+
+    let y = coords.end_pos.y + TRADES_DELTA_Y;
+    let mut day: u32 = 0;
+    let mut month: u32 = 0;
+
+    for (i, trade) in trades.into_iter().enumerate() {
+        let x = coords.start_pos.x + (i as f32 * CANDLE_W);
+
+        // let position = Vector2::new(
+        //     x + CANDLE_W,
+        //     convert_coords_y(start_y, step, max_y as f32, trade.quantity_buy as f32),
+        // );
+        // let size = Vector2::new(CANDLE_W / 2.0, (max_y - min_y) as f32 * step);
+        // let color = Color::BLUE;
+        // d.draw_rectangle_v(position, size, color);
+
+        // print time labels on x-axis
+        match frame {
+            Frame::M1 => draw_frames_m1(d, trade.trade_period, &mut day, Vector2::new(x, y)),
+            Frame::H1 => draw_frames_h1(d, trade.trade_period, &mut day, Vector2::new(x, y)),
+            Frame::D1 => draw_frame_d1(d, trade.trade_period, &mut month, Vector2::new(x, y)),
+        }
+    }
 }
 
 fn draw_info(d: &mut RaylibDrawHandle, coords: &DrawCoords, font: &Font, info: &str) {

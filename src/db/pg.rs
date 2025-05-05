@@ -95,55 +95,91 @@ pub async fn get_trades_view(
     begin: NaiveDateTime,
     end: NaiveDateTime,
     frame: &Frame,
+    limit: i32,
 ) -> Vec<TradeView> {
     let join_str = match frame {
-        Frame::M1 => "a.trade_period = b",
-        Frame::H1 => "a.trade_period = b",
+        Frame::M1 => "a.trade_period = b::timestamp",
+        Frame::H1 => "a.trade_period = b::timestamp",
         Frame::D1 => "a.trade_period::date = b::date",
     };
     let sql = format!(
         r#"
     select 
-        b as trade_period, coalesce(a.buysell, 'N') as buysell, 
-        coalesce(sum(a.price), 0.0) as price_all, 
+        b::timestamp as trade_period, 'A' as buysell, --coalesce(a.buysell, 'N') as buysell, 
+        coalesce(avg(a.price), 0.0)::float4 as price_all, 
         coalesce(sum(a.quantity), 0) as quantity_all, 
         coalesce(sum(a.value), 0.0) as value_all,
-        coalesce(sum(a.price) filter (where a.buysell = 'B'), 0.0) as price_buy, 
+        coalesce(avg(a.price) filter (where a.buysell = 'B'), 0.0)::float4 as price_buy, 
         coalesce(sum(a.quantity) filter (where a.buysell = 'B'), 0) as quantity_buy, 
         coalesce(sum(a.value) filter (where a.buysell = 'B'), 0.0) as value_buy,
-        coalesce(sum(a.price) filter (where a.buysell = 'S'), 0.0) as price_sell, 
+        coalesce(avg(a.price) filter (where a.buysell = 'S'), 0.0)::float4 as price_sell, 
         coalesce(sum(a.quantity) filter (where a.buysell = 'S'), 0) as quantity_sell, 
         coalesce(sum(a.value) filter (where a.buysell = 'S'), 0.0) as value_sell
-    from generate_series($3, $4, '$1'::interval) as b
+    from generate_series($3::timestamp, $4::timestamp, $1::interval) as b
     left join
     (
         select 
-            date_bin('$1', t.trade_datetime, t.trade_datetime::date) as trade_period,
+            date_bin($1::interval, t.trade_datetime, t.trade_datetime::date) as trade_period,
             t.price, t.quantity, t.value, t.buysell
         from public.trades as t
         inner join public.securities as s on s.id = t.security_id
         where s.code = $2
-            and trade_datetime >= $3
-            and trade_datetime <= $4
+            and trade_datetime >= $3::timestamp
+            and trade_datetime <= $4::timestamp
     ) as a on {}
-    group by b, a.buysell
-    order by b;
+    group by b --, a.buysell
+    order by b
+    limit $5;
         "#,
         join_str
     );
 
-    // println!("{}", sql);
+    // let sql = r#"
+    // select
+    //     b::timestamp as trade_period, coalesce(a.buysell, 'N') as buysell,
+    //     coalesce(sum(a.price), 0.0) as price_all,
+    //     coalesce(sum(a.quantity), 0) as quantity_all,
+    //     coalesce(sum(a.value), 0.0) as value_all,
+    //     coalesce(sum(a.price) filter (where a.buysell = 'B'), 0.0) as price_buy,
+    //     coalesce(sum(a.quantity) filter (where a.buysell = 'B'), 0) as quantity_buy,
+    //     coalesce(sum(a.value) filter (where a.buysell = 'B'), 0.0) as value_buy,
+    //     coalesce(sum(a.price) filter (where a.buysell = 'S'), 0.0) as price_sell,
+    //     coalesce(sum(a.quantity) filter (where a.buysell = 'S'), 0) as quantity_sell,
+    //     coalesce(sum(a.value) filter (where a.buysell = 'S'), 0.0) as value_sell
+    // from generate_series('2025-04-26 10:00:00', '2025-04-27 10:00:00', '1 min'::interval) as b
+    // left join
+    // (
+    //     select
+    //         date_bin('1 min', t.trade_datetime, t.trade_datetime::date) as trade_period,
+    //         t.price, t.quantity, t.value, t.buysell
+    //     from public.trades as t
+    //     inner join public.securities as s on s.id = t.security_id
+    //     where s.code = 'MOEX'
+    //         and trade_datetime >= '2025-04-26 10:00:00'
+    //         and trade_datetime <= '2025-04-27 10:00:00'
+    // ) as a on a.trade_period = b
+    // group by b, a.buysell
+    // order by b
+    // limit 79 * 2;
+    //     "#;
+
+    // let result: Vec<TradeView> = sqlx::query_as(&sql)
+    //     .fetch_all(pool)
+    //     .await
+    //     .expect("failed to fetch trades");
 
     let frame_str = match frame {
         Frame::M1 => "1 min",
         Frame::H1 => "1 hour",
         Frame::D1 => "1 day",
     };
+    // println!("begin: {begin}, end: {end}, frame: {frame_str}");
     let result: Vec<TradeView> = sqlx::query_as(&sql)
         .bind(frame_str)
         .bind(security)
         .bind(begin)
         .bind(end)
+        .bind(limit)
         .fetch_all(pool)
         .await
         .expect("failed to fetch trades");
