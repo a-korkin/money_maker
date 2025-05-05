@@ -105,7 +105,7 @@ pub async fn get_trades_view(
     let sql = format!(
         r#"
     select 
-        b::timestamp as trade_period, 'A' as buysell, --coalesce(a.buysell, 'N') as buysell, 
+        b::timestamp as trade_period, string_agg(coalesce(a.buysell, 'N'), '') as buysell, --coalesce(a.buysell, 'N') as buysell, 
         coalesce(avg(a.price), 0.0)::float4 as price_all, 
         coalesce(sum(a.quantity), 0) as quantity_all, 
         coalesce(sum(a.value), 0.0) as value_all,
