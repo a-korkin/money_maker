@@ -1,7 +1,7 @@
 use crate::db::pg;
 use crate::models::common::{Candle, Frame, TradeView};
 use chrono::Datelike;
-use chrono::{NaiveDate, NaiveDateTime, Timelike};
+use chrono::{NaiveDateTime, Timelike};
 use raylib::prelude::GuiControlProperty::*;
 use raylib::prelude::GuiTextAlignment::*;
 use raylib::prelude::*;
@@ -100,6 +100,9 @@ pub async fn run_terminal(pool: &PgPool) {
     let mut info = String::from("");
     let mut current_candle = candles.first().unwrap().clone();
 
+    rl.gui_set_font(&font);
+    rl.gui_set_style(GuiControl::DEFAULT, GuiDefaultProperty::TEXT_SIZE, 15);
+
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
 
@@ -118,6 +121,7 @@ pub async fn run_terminal(pool: &PgPool) {
             &mut ui.begin_edit,
             "BEGIN",
             &mut begin,
+            &font,
         ) {
             (candles, coords) = fetch_data(
                 pool,
@@ -136,6 +140,7 @@ pub async fn run_terminal(pool: &PgPool) {
             &mut ui.end_edit,
             "END",
             &mut end,
+            &font,
         ) {
             (candles, coords) = fetch_data(
                 pool,
@@ -287,7 +292,7 @@ fn draw_axis(d: &mut RaylibDrawHandle, font: &Font, coords: &DrawCoords) {
             _ => 50.0,
         };
         d.draw_text_ex(
-            font, //d.get_font_default(),
+            font,
             &format!("{:.2}", label),
             Vector2::new(coords.start_pos.x - offset, cur_y - 8_f32),
             15.0,
@@ -419,18 +424,12 @@ fn draw_frames_m1(
     let current_hour = date.hour();
     if current_hour != *hour && current_hour != 6 {
         *hour = current_hour;
-
-        let offset = match current_hour {
-            0..=9 => 12.0,
-            10..=19 => 14.0,
-            _ => 12.0,
-        };
         d.draw_text_ex(
-            d.get_font_default(),
+            font,
             &format!("{:02}", current_hour),
             Vector2::new(position.x + offset, position.y + 20.0),
-            10.0,
-            1.0,
+            15.0,
+            0.0,
             Color::BLACK,
         );
     }
@@ -579,13 +578,14 @@ fn draw_datepicker(
     ui_edit: &mut bool,
     label: &str,
     date: &mut NaiveDateTime,
+    font: &Font,
 ) -> bool {
     d.draw_text_ex(
-        d.get_font_default(),
+        font,
         label,
-        position,
-        10.0,
-        1.0,
+        Vector2::new(position.x, position.y - 5.0),
+        15.0,
+        0.0,
         Color::BLACK,
     );
     if d.gui_text_box(
