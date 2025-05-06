@@ -194,14 +194,7 @@ pub async fn run_terminal(pool: &PgPool) {
         draw_graphs(&mut d, &coords, &mut candles, &Frame::from(current_frame));
 
         // trades
-        draw_trades(
-            &mut d,
-            &font,
-            &mut candles,
-            &trades,
-            &coords,
-            &Frame::from(current_frame),
-        );
+        draw_trades(&mut d, &font, &trades, &coords, &Frame::from(current_frame));
 
         if mouse_click(&mut d, &coords, &candles, &mut current_candle, &mut info) {
             // trades = pg::get_trades_view(
@@ -634,7 +627,6 @@ fn draw_dropdown(
 fn draw_trades(
     d: &mut RaylibDrawHandle,
     font: &Font,
-    candles: &mut Vec<Candle>,
     trades: &Vec<TradeView>,
     coords: &DrawCoords,
     frame: &Frame,
