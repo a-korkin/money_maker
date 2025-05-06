@@ -191,7 +191,13 @@ pub async fn run_terminal(pool: &PgPool) {
 
         // candles
         draw_axis(&mut d, &font, &coords);
-        draw_graphs(&mut d, &coords, &mut candles, &Frame::from(current_frame));
+        draw_graphs(
+            &mut d,
+            &coords,
+            &mut candles,
+            &Frame::from(current_frame),
+            &font,
+        );
 
         // trades
         draw_trades(&mut d, &font, &trades, &coords, &Frame::from(current_frame));
@@ -276,14 +282,14 @@ fn draw_axis(d: &mut RaylibDrawHandle, font: &Font, coords: &DrawCoords) {
             Color::BLACK,
         );
         let offset = match label {
-            0.0..1000.0 => 40.0,
-            1000.0..10_000.0 => 45.0,
+            0.0..1000.0 => 50.0,
+            1000.0..10_000.0 => 52.0,
             _ => 50.0,
         };
         d.draw_text_ex(
             font, //d.get_font_default(),
             &format!("{:.2}", label),
-            Vector2::new(coords.start_pos.x - offset, cur_y - 5_f32),
+            Vector2::new(coords.start_pos.x - offset, cur_y - 8_f32),
             15.0,
             0.0,
             Color::BLACK,
@@ -332,6 +338,7 @@ fn draw_graphs(
     coords: &DrawCoords,
     candles: &mut Vec<Candle>,
     frame: &Frame,
+    font: &Font,
 ) {
     let y = coords.end_pos.y;
     let mut day: u32 = 0;
@@ -350,9 +357,9 @@ fn draw_graphs(
 
         // print time labels on x-axis
         match frame {
-            Frame::M1 => draw_frames_m1(d, candle.begin, &mut day, Vector2::new(x, y)),
+            Frame::M1 => draw_frames_m1(d, candle.begin, &mut day, Vector2::new(x, y), font),
             Frame::H1 => draw_frames_h1(d, candle.begin, &mut day, Vector2::new(x, y)),
-            Frame::D1 => draw_frame_d1(d, candle.begin, &mut month, Vector2::new(x, y)),
+            Frame::D1 => draw_frames_d1(d, candle.begin, &mut month, Vector2::new(x, y)),
         }
     }
 }
@@ -393,21 +400,18 @@ fn draw_frames_m1(
     date: NaiveDateTime,
     hour: &mut u32,
     position: Vector2,
+    font: &Font,
 ) {
     let minute = date.minute();
-    let offset = match minute {
-        0..=9 => 12.0,
-        10..=19 => 14.0,
-        _ => 12.0,
-    };
+    let offset = 10.5;
 
     if minute % 2 == 0 {
         d.draw_text_ex(
-            d.get_font_default(),
+            font,
             &format!("{:02}", minute),
             Vector2::new(position.x + offset, position.y + 8.0),
-            10.0,
-            1.0,
+            15.0,
+            0.0,
             Color::BLACK,
         );
     }
@@ -432,7 +436,7 @@ fn draw_frames_m1(
     }
 }
 
-fn draw_frame_d1(
+fn draw_frames_d1(
     d: &mut RaylibDrawHandle,
     date: NaiveDateTime,
     month: &mut u32,
@@ -678,7 +682,7 @@ fn draw_trades(
         d.draw_text_ex(
             font,
             &format!("{:.2}", label),
-            Vector2::new(coords.start_pos.x - offset, cur_y - 5_f32),
+            Vector2::new(coords.start_pos.x - offset, cur_y - 8_f32),
             15.0,
             0.0,
             Color::BLACK,
@@ -746,9 +750,9 @@ fn draw_trades(
 
         // print time labels on x-axis
         match frame {
-            Frame::M1 => draw_frames_m1(d, trade.trade_period, &mut day, Vector2::new(x, y)),
+            Frame::M1 => draw_frames_m1(d, trade.trade_period, &mut day, Vector2::new(x, y), font),
             Frame::H1 => draw_frames_h1(d, trade.trade_period, &mut day, Vector2::new(x, y)),
-            Frame::D1 => draw_frame_d1(d, trade.trade_period, &mut month, Vector2::new(x, y)),
+            Frame::D1 => draw_frames_d1(d, trade.trade_period, &mut month, Vector2::new(x, y)),
         }
     }
 }
