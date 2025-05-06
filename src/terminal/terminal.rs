@@ -73,8 +73,6 @@ pub async fn run_terminal(pool: &PgPool) {
     )
     .await;
 
-    println!("{:#?}", trades);
-
     // ui
     let alpha = 1.0;
     let mut ui = UiElements {
@@ -193,14 +191,7 @@ pub async fn run_terminal(pool: &PgPool) {
 
         // candles
         draw_axis(&mut d, &font, &coords);
-        draw_graphs(
-            &mut d,
-            &coords,
-            &mut candles,
-            &trades,
-            &Frame::from(current_frame),
-            GraphType::Candles,
-        );
+        draw_graphs(&mut d, &coords, &mut candles, &Frame::from(current_frame));
 
         // trades
         draw_trades(
@@ -339,48 +330,30 @@ fn draw_axis(d: &mut RaylibDrawHandle, font: &Font, coords: &DrawCoords) {
     }
 }
 
-fn convert_coords_y(start_pos: f32, step: f32, max: f32, in_value: f32) -> f32 {
-    (max - in_value) * step + start_pos
-}
-
-enum GraphType {
-    Candles,
-    Trades,
+fn convert_coords_y(start: f32, step: f32, max: f32, value: f32) -> f32 {
+    (max - value) * step + start
 }
 
 fn draw_graphs(
     d: &mut RaylibDrawHandle,
     coords: &DrawCoords,
     candles: &mut Vec<Candle>,
-    trades: &Vec<TradeView>,
     frame: &Frame,
-    graph_type: GraphType,
 ) {
-    let y = match graph_type {
-        GraphType::Candles => coords.end_pos.y,
-        GraphType::Trades => coords.end_pos.y + TRADES_DELTA_Y,
-    };
-
+    let y = coords.end_pos.y;
     let mut day: u32 = 0;
     let mut month: u32 = 0;
 
     for (i, candle) in candles.into_iter().enumerate() {
         let x = coords.start_pos.x + (i as f32 * CANDLE_W);
-        match graph_type {
-            GraphType::Candles => {
-                draw_candle(
-                    d,
-                    candle,
-                    x + CANDLE_W,
-                    coords.start_pos,
-                    coords.step_y,
-                    coords.max_y,
-                );
-            }
-            GraphType::Trades => {
-                println!("trades: {}", trades.len());
-            }
-        }
+        draw_candle(
+            d,
+            candle,
+            x + CANDLE_W,
+            coords.start_pos,
+            coords.step_y,
+            coords.max_y,
+        );
 
         // print time labels on x-axis
         match frame {
@@ -753,22 +726,31 @@ fn draw_trades(
         i += 1;
     }
 
-    // draw_graphs(d, &coords, candles, trades, frame, GraphType::Trades);
-
     let y = coords.end_pos.y + TRADES_DELTA_Y;
     let mut day: u32 = 0;
     let mut month: u32 = 0;
 
+    let step_y = (end_y - start_y) / (max_y - min_y) as f32;
     for (i, trade) in trades.into_iter().enumerate() {
         let x = coords.start_pos.x + (i as f32 * CANDLE_W);
 
-        // let position = Vector2::new(
-        //     x + CANDLE_W,
-        //     convert_coords_y(start_y, step, max_y as f32, trade.quantity_buy as f32),
-        // );
-        // let size = Vector2::new(CANDLE_W / 2.0, (max_y - min_y) as f32 * step);
-        // let color = Color::BLUE;
-        // d.draw_rectangle_v(position, size, color);
+        // buy
+        let position = Vector2::new(
+            x + CANDLE_W,
+            convert_coords_y(start_y, step_y, max_y as f32, trade.quantity_buy as f32),
+        );
+        let size = Vector2::new(CANDLE_W / 2.0, trade.quantity_buy as f32 * step_y);
+        let color = Color::GREEN;
+        d.draw_rectangle_v(position, size, color);
+
+        // sell
+        let position = Vector2::new(
+            x + CANDLE_W + CANDLE_W / 2.0,
+            convert_coords_y(start_y, step_y, max_y as f32, trade.quantity_sell as f32),
+        );
+        let size = Vector2::new(CANDLE_W / 2.0, trade.quantity_sell as f32 * step_y);
+        let color = Color::RED;
+        d.draw_rectangle_v(position, size, color);
 
         // print time labels on x-axis
         match frame {
