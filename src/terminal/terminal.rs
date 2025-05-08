@@ -589,7 +589,7 @@ fn draw_datepicker(
         Color::BLACK,
     );
     if d.gui_text_box(
-        Rectangle::new(position.x, position.y + 10.0, 125.0, 30.0),
+        Rectangle::new(position.x, position.y + 10.0, 186.0, 30.0),
         ui_str,
         *ui_edit,
     ) {
