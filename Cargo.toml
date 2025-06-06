@@ -1,4 +1,3 @@
 [workspace]
 resolver = "3"
-members = ["app"]
-
+members = ["app", "cron"]
