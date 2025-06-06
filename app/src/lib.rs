@@ -65,6 +65,8 @@ pub async fn run() {
             .collect::<Vec<String>>(),
     };
 
+    println!("check");
+
     let start: NaiveDateTime = dotenv::var("PERIOD_START")
         .expect("failed to get PERIOD_START")
         .parse::<NaiveDate>()

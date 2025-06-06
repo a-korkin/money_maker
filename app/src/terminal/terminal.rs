@@ -95,7 +95,7 @@ pub async fn run_terminal(pool: &PgPool) {
     rl.set_target_fps(60);
 
     let font = rl
-        .load_font(&thread, "assets/fonts/SourceCodePro-Bold.ttf")
+        .load_font(&thread, "app/assets/fonts/SourceCodePro-Bold.ttf")
         .expect("failed to load font");
     let mut info = String::from("");
     let mut current_candle = candles.first().unwrap().clone();

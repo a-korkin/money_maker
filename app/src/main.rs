@@ -1,4 +1,4 @@
-use money_maker::run;
+use app::run;
 use std::io::Result;
 use tokio;
 
