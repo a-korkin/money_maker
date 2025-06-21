@@ -38,8 +38,6 @@ impl ToString for DownloadType {
 }
 
 async fn run(security: &str, download_type: &DownloadType) {
-    println!("{:?}: {}", download_type, security);
-
     let mut ok = true;
     let mut i = 1;
     let base_url = dotenv::var("BASE_URL").expect("failed to get BASE_URL");
