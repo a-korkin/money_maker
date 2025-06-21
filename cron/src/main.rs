@@ -53,7 +53,9 @@ async fn run(security: &str, download_type: &DownloadType) {
     let suffix = match download_type {
         DownloadType::Trades => format!("boards/TQBR/securities/{security}/trades.csv"),
         DownloadType::Candles => {
-            format!("securities/{security}/candles.csv?from={yesterday}&interval=1")
+            format!(
+                "securities/{security}/candles.csv?from={yesterday}&till={yesterday}&interval=1"
+            )
         }
     };
 
@@ -103,7 +105,7 @@ async fn run(security: &str, download_type: &DownloadType) {
             }
             DownloadType::Candles => {
                 url = format!(
-"{base_url}/securities/{security}/candles.csv?from={yesterday}&interval=1&start={start}"
+"{base_url}/securities/{security}/candles.csv?from={yesterday}&till={yesterday}&interval=1&start={start}"
                 );
             }
         }
