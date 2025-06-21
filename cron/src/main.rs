@@ -43,11 +43,14 @@ async fn run(security: &str, download_type: &DownloadType) {
     let mut ok = true;
     let mut i = 1;
     let base_url = dotenv::var("BASE_URL").expect("failed to get BASE_URL");
-    let today = Local::now().date_naive();
-    let yesterday = today
-        .checked_sub_days(Days::new(1))
-        .expect("failed to get yesterday")
-        .format("%Y-%m-%d");
+    let date = match download_type {
+        DownloadType::Trades => Local::now().date_naive(),
+        DownloadType::Candles => Local::now()
+            .date_naive()
+            .checked_sub_days(Days::new(1))
+            .expect("failed to get yesterday"),
+    };
+    let yesterday = date.format("%Y-%m-%d");
 
     let suffix = match download_type {
         DownloadType::Trades => format!("boards/TQBR/securities/{security}/trades.csv"),
@@ -77,7 +80,7 @@ async fn run(security: &str, download_type: &DownloadType) {
             fs::create_dir_all(&path).expect("failed to create path");
         }
 
-        let file_name = format!("{}_{:02}.csv", today, i);
+        let file_name = format!("{}_{:02}.csv", date, i);
         let file_path = Path::new(&path.to_str().unwrap()).join(&file_name);
         let mut file = fs::File::create(file_path).expect("failed to create file");
         file.write_all(rows.join("\n").as_bytes())
