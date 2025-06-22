@@ -65,8 +65,6 @@ pub async fn run() {
             .collect::<Vec<String>>(),
     };
 
-    println!("check");
-
     let start: NaiveDateTime = dotenv::var("PERIOD_START")
         .expect("failed to get PERIOD_START")
         .parse::<NaiveDate>()
@@ -81,12 +79,12 @@ pub async fn run() {
 
     let download_type = DownloadType::from(args.download.as_str());
 
-    // match download_type {
-    //     DownloadType::Candles => fetch_data(&securities, DownloadType::Candles, start, end).await,
-    //     DownloadType::Trades => {
-    //         fetch_data(&securities, DownloadType::Trades, start, end).await;
-    //     }
-    // }
+    match download_type {
+        DownloadType::Candles => fetch_data(&securities, DownloadType::Candles, start, end).await,
+        DownloadType::Trades => {
+            fetch_data(&securities, DownloadType::Trades, start, end).await;
+        }
+    }
 
     if args.add {
         add_securities(&pool, &securities).await;
@@ -252,7 +250,6 @@ pub async fn download(
         fs::create_dir_all(&path)?;
     }
     let file_path = Path::new(&path.to_str().unwrap()).join(file_name);
-    println!("file_path: {:?}", file_path);
     let mut file = fs::File::create(file_path)?;
     file.write_all(rows.join("\n").as_bytes())?;
 
