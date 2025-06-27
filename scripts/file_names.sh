@@ -1,9 +1,8 @@
 #!/bin/bash
 
 source .env
-# DIR_CANDLES=$DATA_DIR/candles/OZON
-DIR_CANDLES=data/candles/OZON
-
-find $DIR_CANDLES -regextype posix-extended \
-    -regex "$DIR_CANDLES/[[:digit:]]{4}-[[:digit:]]{2}-[[:digit:]]{2}_([[:digit:]]{1})\.csv"
+DIR_CANDLES=$DATA_DIR/candles
+# DIR_CANDLES=data/candles
     
+rename 's/([0-9]{4}-[0-9]{2}-[0-9]{2}_)([0-9]{1})(\.csv)/${1}0${2}${3}/' \
+    $DIR_CANDLES/**/*.csv
