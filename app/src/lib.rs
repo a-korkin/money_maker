@@ -80,8 +80,7 @@ pub async fn run() {
         let begin = NaiveDateTime::parse_from_str("2025-04-26 00:00:00", date_format)
             .expect("failed to convert datetime");
         let end = begin + time_duration::from_secs(60 * 60 * 24 * 1);
-        println!("check");
-        for candle in get_candles(&pool, "MOEX", begin, end, 1000, &Frame::M1).await {
+        for candle in get_candles(&pool, "MOEX", begin, end, 1500, &Frame::M1).await {
             println!("{candle}");
         }
     }
