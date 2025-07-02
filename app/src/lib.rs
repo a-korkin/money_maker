@@ -80,9 +80,29 @@ pub async fn run() {
         let begin = NaiveDateTime::parse_from_str("2025-04-26 00:00:00", date_format)
             .expect("failed to convert datetime");
         let end = begin + time_duration::from_secs(60 * 60 * 24 * 1);
-        for candle in get_candles(&pool, "MOEX", begin, end, 1500, &Frame::M1).await {
-            println!("{candle}");
-        }
+        let candles = get_candles(&pool, "MOEX", begin, end, 1000, &Frame::M1).await;
+        display(&candles);
+    }
+}
+
+fn pretty_print_candle(candle: &Candle) {
+    let color = match (candle.open, candle.close) {
+        (o, c) if o > c => "31",
+        (o, c) if o < c => "32",
+        _ => "37",
+    };
+    let max = f32::max(candle.open, candle.close);
+    let min = f32::min(candle.open, candle.close);
+    let percent = (max / (min / 100.0)) - 100.0;
+    println!(
+        "\x1b[{color}m{}\topen: {:.2}\tclose: {:.2}\tpercent: {:.2}\x1b[0m",
+        candle.begin, candle.open, candle.close, percent
+    );
+}
+
+fn display(candles: &Vec<Candle>) {
+    for candle in candles {
+        pretty_print_candle(candle);
     }
 }
 
