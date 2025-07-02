@@ -76,9 +76,14 @@ pub struct Candle {
 
 impl std::fmt::Display for Candle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let color = match (self.open, self.close) {
+            (o, c) if o > c => "31",
+            (o, c) if o < c => "32",
+            _ => "37",
+        };
         write!(
             f,
-            "{}\nopen: {:.2}\nclose: {:.2}",
+            "\x1b[{color}m{}\topen: {:.2}\tclose: {:.2}\x1b[0m",
             self.begin, self.open, self.close
         )
     }
@@ -245,6 +250,7 @@ pub struct Packet {
     pub balance: f32,
 }
 
+#[allow(dead_code)]
 impl Packet {
     pub fn new(security: &str, min_count: i32, balance: f32) -> Self {
         Self {

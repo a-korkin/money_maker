@@ -8,14 +8,16 @@ use chrono::prelude::*;
 use chrono::Duration;
 use clap::Parser;
 use csv;
+use db::pg::get_candles;
 use db::pg::{add_candles, add_securities, add_trades, get_all_securities, init_db};
 use dotenv;
 use log::info;
-use models::common::{Candle, Trade};
+use models::common::{Candle, Frame, Trade};
 use plotters::prelude::*;
 use sqlx::postgres::PgPool;
 use std::fs;
 use std::path::Path;
+use std::time::Duration as time_duration;
 use utils::logger;
 
 /// Money maker app
@@ -37,6 +39,10 @@ struct Args {
     /// Run terminal
     #[arg(short, long)]
     terminal: bool,
+
+    /// Show candles
+    #[arg(short, long)]
+    display: bool,
 }
 
 pub async fn run() {
@@ -61,11 +67,23 @@ pub async fn run() {
             .collect::<Vec<String>>(),
     };
 
-    let kind = Kind::from(args.kind.as_str());
+    if args.kind.as_str() != "none" {
+        let kind = Kind::from(args.kind.as_str());
+        if args.add {
+            add_securities(&pool, &securities).await;
+            insert_entity(&pool, kind, &securities).await;
+        }
+    }
 
-    if args.add {
-        add_securities(&pool, &securities).await;
-        insert_entity(&pool, kind, &securities).await;
+    if args.display {
+        let date_format: &str = "%Y-%m-%d %H:%M:%S";
+        let begin = NaiveDateTime::parse_from_str("2025-04-26 00:00:00", date_format)
+            .expect("failed to convert datetime");
+        let end = begin + time_duration::from_secs(60 * 60 * 24 * 1);
+        println!("check");
+        for candle in get_candles(&pool, "MOEX", begin, end, 1000, &Frame::M1).await {
+            println!("{candle}");
+        }
     }
 }
 
