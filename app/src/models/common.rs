@@ -69,9 +69,9 @@ pub struct Candle {
     #[serde(with = "unix_timestamp")]
     pub end: NaiveDateTime,
     #[sqlx(skip)]
-    pub position_x: f32,
+    pub position_x: Option<f32>,
     #[sqlx(skip)]
-    pub position_y: f32,
+    pub position_y: Option<f32>,
 }
 
 impl std::fmt::Display for Candle {

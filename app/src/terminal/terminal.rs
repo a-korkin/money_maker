@@ -386,8 +386,8 @@ fn draw_candle(
     let pos = Vector2::new(idx_pos, convert_coords_y(start_pos.y, step_y, max_y, max));
     let size = Vector2::new(CANDLE_W, (max - min) * step_y);
     d.draw_rectangle_v(pos, size, color);
-    candle.position_x = pos.x;
-    candle.position_y = pos.y;
+    candle.position_x = Some(pos.x);
+    candle.position_y = Some(pos.y);
     let high = Vector2::new(
         idx_pos + CANDLE_W / 2.0,
         convert_coords_y(start_pos.y, step_y, max_y, candle.high),
@@ -782,8 +782,8 @@ fn mouse_click(
             && mouse_position.y <= coords.end_pos.y
         {
             for candle in candles {
-                if mouse_position.x >= candle.position_x
-                    && mouse_position.x <= candle.position_x + CANDLE_W
+                if mouse_position.x >= candle.position_x.unwrap_or(0.0)
+                    && mouse_position.x <= candle.position_x.unwrap_or(0.0) + CANDLE_W
                 {
                     *current_candle = candle.clone();
                     *info = current_candle.to_string();

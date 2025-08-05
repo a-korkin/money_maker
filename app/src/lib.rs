@@ -4,6 +4,7 @@ mod strategy;
 mod terminal;
 mod utils;
 
+use anyhow::{Context, Result};
 use chrono::prelude::*;
 use chrono::Duration;
 use clap::Parser;
@@ -71,7 +72,9 @@ pub async fn run() {
         let kind = Kind::from(args.kind.as_str());
         if args.add {
             add_securities(&pool, &securities).await;
-            insert_entity(&pool, kind, &securities).await;
+            insert_entity(&pool, kind, &securities)
+                .await
+                .expect("failed to insert entity");
         }
     }
 
@@ -144,29 +147,35 @@ pub fn elapsed_time(start: NaiveTime, end: NaiveTime) -> String {
     )
 }
 
-pub async fn get_candles_from_csv(path: &str) -> Vec<Candle> {
-    let mut rdr = csv::ReaderBuilder::new()
+pub async fn get_candles_from_csv(path: &str) -> Result<Vec<Candle>> {
+    let rdr = csv::ReaderBuilder::new()
         .delimiter(b';')
         .from_path(path)
-        .expect("failed to read csv");
+        .context("failed to read csv");
 
-    rdr.deserialize::<Candle>()
-        .map(|c| c.unwrap())
-        .collect::<Vec<_>>()
+    let result = rdr?
+        .deserialize::<Candle>()
+        .map(|c| c.expect("failed to parse elem"))
+        .collect::<Vec<_>>();
+
+    Ok(result)
 }
 
-pub async fn get_trades_from_csv(path: &str) -> Vec<Trade> {
-    let mut rdr = csv::ReaderBuilder::new()
+pub async fn get_trades_from_csv(path: &str) -> Result<Vec<Trade>> {
+    let rdr = csv::ReaderBuilder::new()
         .delimiter(b';')
         .from_path(path)
-        .expect("failed to read csv");
+        .context("failed to read csv");
 
-    rdr.deserialize::<Trade>()
-        .map(|c| c.unwrap())
-        .collect::<Vec<_>>()
+    let result = rdr?
+        .deserialize::<Trade>()
+        .map(|c| c.expect("failed to parse elem"))
+        .collect::<Vec<_>>();
+
+    Ok(result)
 }
 
-async fn insert_entity(pool: &PgPool, kind: Kind, securities: &Vec<String>) {
+async fn insert_entity(pool: &PgPool, kind: Kind, securities: &Vec<String>) -> Result<()> {
     let start = Local::now().time();
     for security in securities {
         let data_dir = dotenv::var("DATA_DIR").expect("failed to get DATA_DIR");
@@ -190,7 +199,7 @@ async fn insert_entity(pool: &PgPool, kind: Kind, securities: &Vec<String>) {
                         let candles = get_candles_from_csv(
                             file.path().to_str().expect("failed to get filepath"),
                         )
-                        .await;
+                        .await?;
                         let added = add_candles(pool, security, &candles).await;
                         info!(
                             "{} => {}/{}, count => {}",
@@ -204,7 +213,7 @@ async fn insert_entity(pool: &PgPool, kind: Kind, securities: &Vec<String>) {
                         let trades = get_trades_from_csv(
                             file.path().to_str().expect("failed to get filepath"),
                         )
-                        .await;
+                        .await?;
                         let added = add_trades(pool, security, &trades).await;
                         info!(
                             "{} => {}/{}, count => {}",
@@ -220,6 +229,8 @@ async fn insert_entity(pool: &PgPool, kind: Kind, securities: &Vec<String>) {
     }
     let end = Local::now().time();
     info!("elapsed time: {}", elapsed_time(start, end));
+
+    Ok(())
 }
 
 pub async fn draw_candles(candles: Vec<Candle>, security: &str, file_name: &str) {
@@ -262,7 +273,7 @@ pub async fn draw_candles(candles: Vec<Candle>, security: &str, file_name: &str)
     root.present().unwrap();
 }
 
-pub async fn draw_graphs(security: &str) -> std::io::Result<()> {
+pub async fn draw_graphs(security: &str) -> Result<()> {
     let data_dir = dotenv::var("DATA_DIR").expect("failed to read DATA_DIR");
 
     let path = Path::new(&data_dir)
@@ -280,7 +291,7 @@ pub async fn draw_graphs(security: &str) -> std::io::Result<()> {
                 .to_str()
                 .expect("failed to get filepath")
                 .to_owned();
-            let candles = get_candles_from_csv(&file_path).await;
+            let candles = get_candles_from_csv(&file_path).await?;
             let file_name = file
                 .file_name()
                 .to_str()

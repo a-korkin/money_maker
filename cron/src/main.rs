@@ -101,11 +101,12 @@ async fn run(security: &str, download_type: &DownloadType) {
                     .to_owned();
 
                 url = format!(
-"{base_url}/boards/TQBR/securities/{security}/trades.csv?tradeno={tradeno}&next_trade=1");
+                    "{base_url}/boards/TQBR/securities/{security}/trades.csv?tradeno={tradeno}&next_trade=1"
+                );
             }
             DownloadType::Candles => {
                 url = format!(
-"{base_url}/securities/{security}/candles.csv?from={yesterday}&till={yesterday}&interval=1&start={start}"
+                    "{base_url}/securities/{security}/candles.csv?from={yesterday}&till={yesterday}&interval=1&start={start}"
                 );
             }
         }
