@@ -126,13 +126,13 @@ pub struct Trade {
     #[serde(rename = "VALUE")]
     pub value: f32,
     #[serde(rename = "PERIOD")]
-    pub period: i8,
+    pub period: String,
     #[serde(rename = "TRADETIME_GRP")]
     pub tradetime_grp: i32,
     #[serde(with = "unix_timestamp", rename = "SYSTIME")]
     pub systime: NaiveDateTime,
     #[serde(rename = "BUYSELL")]
-    pub buysell: i8,
+    pub buysell: String,
     #[serde(rename = "DECIMALS")]
     pub decimals: i32,
     #[serde(rename = "TRADINGSESSION")]
