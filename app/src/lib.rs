@@ -11,7 +11,8 @@ use clap::Parser;
 use csv;
 use db::pg::get_candles;
 use db::pg::{
-    add_candles, add_securities, add_trades, get_all_securities, init_db, remove_dooblicates_trades,
+    add_candles, add_securities, add_trades, get_all_securities, init_db,
+    remove_dooblicates_candles, remove_dooblicates_trades,
 };
 use dotenv;
 use log::info;
@@ -229,7 +230,10 @@ async fn insert_entity(pool: &PgPool, kind: Kind, securities: &Vec<String>) -> R
             }
         }
     }
-    remove_dooblicates_trades(pool).await;
+    match kind {
+        Kind::Trades => remove_dooblicates_trades(pool).await,
+        Kind::Candles => remove_dooblicates_candles(pool).await,
+    }
     let end = Local::now().time();
     info!("elapsed time: {}", elapsed_time(start, end));
 

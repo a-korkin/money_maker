@@ -60,6 +60,34 @@ pub async fn add_candles(pool: &PgPool, security: &str, candles: &Vec<Candle>) -
     res.rows_affected()
 }
 
+pub async fn remove_dooblicates_candles(pool: &PgPool) {
+    let sql = r#"
+    delete from public.candles
+    where id in 
+    (
+        select a.id
+        from
+        (
+            select row_number() over(partition by a.security_id, a.begin_t order by a.id) as rn, a.id
+            from public.candles as a
+            inner join 
+            (
+                select security_id, begin_t
+                from public.candles
+                group by security_id, begin_t
+                having count(*) > 1
+            ) as b on a.security_id = b.security_id and a.begin_t = b.begin_t
+        ) as a
+        where a.rn > 1
+    );
+        "#;
+
+    let _ = sqlx::query(&sql)
+        .execute(pool)
+        .await
+        .expect("Failed to remove dooblicates candles");
+}
+
 pub async fn add_trades(pool: &PgPool, security: &str, trades: &Vec<Trade>) -> u64 {
     let sec: (Uuid,) = sqlx::query_as("select id from public.securities where code = $1")
         .bind(security)
