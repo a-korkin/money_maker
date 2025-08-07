@@ -10,7 +10,9 @@ use chrono::Duration;
 use clap::Parser;
 use csv;
 use db::pg::get_candles;
-use db::pg::{add_candles, add_securities, add_trades, get_all_securities, init_db};
+use db::pg::{
+    add_candles, add_securities, add_trades, get_all_securities, init_db, remove_dooblicates_trades,
+};
 use dotenv;
 use log::info;
 use models::common::{Candle, Frame, Trade};
@@ -227,6 +229,7 @@ async fn insert_entity(pool: &PgPool, kind: Kind, securities: &Vec<String>) -> R
             }
         }
     }
+    remove_dooblicates_trades(pool).await;
     let end = Local::now().time();
     info!("elapsed time: {}", elapsed_time(start, end));
 

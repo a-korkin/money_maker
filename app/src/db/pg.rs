@@ -89,6 +89,33 @@ pub async fn add_trades(pool: &PgPool, security: &str, trades: &Vec<Trade>) -> u
     result.rows_affected()
 }
 
+pub async fn remove_dooblicates_trades(pool: &PgPool) {
+    let sql = r#"
+    delete from public.trades
+    where id in
+    (
+        select a.id
+        from 
+        (
+            select row_number() over(partition by trade_no order by id) as rn, id
+            from public.trades
+            where trade_no in
+            (
+                select trade_no
+                from public.trades
+                group by trade_no
+                having count(*) > 1
+            )
+        ) as a
+        where a.rn > 1
+    );
+        "#;
+    let _ = sqlx::query(&sql)
+        .execute(pool)
+        .await
+        .expect("Failed to drop dooblicates");
+}
+
 pub async fn get_trades_view(
     pool: &PgPool,
     security: &str,
