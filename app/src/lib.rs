@@ -9,9 +9,8 @@ use chrono::prelude::*;
 use chrono::Duration;
 use clap::Parser;
 use csv;
-use db::pg::get_candles;
 use db::pg::{
-    add_candles, add_securities, add_trades, get_all_securities, init_db,
+    add_candles, add_securities, add_trades, get_all_securities, get_candles, init_db,
     remove_dooblicates_candles, remove_dooblicates_trades,
 };
 use dotenv;
@@ -82,12 +81,13 @@ pub async fn run() {
     }
 
     if args.display {
-        let date_format: &str = "%Y-%m-%d %H:%M:%S";
-        let begin = NaiveDateTime::parse_from_str("2025-04-26 00:00:00", date_format)
-            .expect("failed to convert datetime");
-        let end = begin + time_duration::from_secs(60 * 60 * 24 * 1);
-        let candles = get_candles(&pool, "MOEX", begin, end, 1000, &Frame::M1).await;
-        display(&candles);
+        // let date_format: &str = "%Y-%m-%d %H:%M:%S";
+        // let begin = NaiveDateTime::parse_from_str("2025-04-26 00:00:00", date_format)
+        //     .expect("failed to convert datetime");
+        // let end = begin + time_duration::from_secs(60 * 60 * 24 * 1);
+        // let candles = get_candles(&pool, "MOEX", begin, end, 1000, &Frame::M1).await;
+        // display(&candles);
+        strategy::strategy::trade_info(&pool).await;
     }
 }
 

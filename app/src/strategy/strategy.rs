@@ -1,10 +1,18 @@
 use crate::db::pg;
+use crate::db::repo;
 use crate::models::common::{Attempt, AvgPeriod, Candle, Frame, Operation, OperationType, Packet};
 use chrono::{Datelike, NaiveDate, NaiveDateTime, Timelike};
 use sqlx::postgres::PgPool;
 // use std::time::Duration;
 use uuid::Uuid;
 
+#[allow(dead_code)]
+pub async fn trade_info(pool: &PgPool) {
+    let info = repo::get_trade_info(pool, "AFLT").await;
+    println!("{:#?}", info);
+}
+
+#[allow(dead_code)]
 pub async fn run_strategy(pool: &PgPool) {
     let begin = NaiveDate::from_ymd_opt(2024, 6, 10)
         .unwrap()
@@ -30,6 +38,7 @@ pub async fn run_strategy(pool: &PgPool) {
     }
 }
 
+#[allow(dead_code)]
 async fn strategy_3(pool: &PgPool, packet: &mut Packet, begin: NaiveDateTime, end: NaiveDateTime) {
     let candles = pg::get_candles(pool, &packet.security, begin, end, 200_000, &Frame::M1).await;
     let mut volume_up: f32 = 0.0;

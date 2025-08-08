@@ -262,3 +262,17 @@ impl Packet {
         }
     }
 }
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize, sqlx::FromRow, Clone)]
+pub struct TradeInfo {
+    #[serde(with = "unix_timestamp")]
+    pub begin: NaiveDateTime,
+    pub avg_price: f32,
+    pub sum_quantity: i32,
+    pub buysell: String,
+    pub open: f32,
+    pub close: f32,
+    pub high: f32,
+    pub low: f32,
+}

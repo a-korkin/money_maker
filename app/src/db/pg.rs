@@ -1,5 +1,5 @@
 use crate::models::common::{
-    Attempt, AvgPeriod, Candle, Frame, Operation, SecuritiesStr, ToSql, Trade, TradeView,
+    Attempt, AvgPeriod, Candle, Frame, Operation, SecuritiesStr, ToSql, Trade, TradeInfo, TradeView,
 };
 use chrono::NaiveDateTime;
 use dotenv;
