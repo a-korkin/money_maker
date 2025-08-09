@@ -6,7 +6,7 @@ mod utils;
 
 use anyhow::{Context, Result};
 use chrono::prelude::*;
-use chrono::Duration;
+use chrono::{Duration, NaiveDate};
 use clap::Parser;
 use csv;
 use db::pg::{
@@ -15,11 +15,12 @@ use db::pg::{
 };
 use dotenv;
 use log::info;
-use models::common::{Candle, Frame, Trade};
+use models::common::{Candle, Frame, Trade, TradeInfo};
 use plotters::prelude::*;
 use sqlx::postgres::PgPool;
 use std::fs;
 use std::path::Path;
+use std::str::FromStr;
 use std::time::Duration as time_duration;
 use utils::logger;
 
@@ -87,8 +88,27 @@ pub async fn run() {
         // let end = begin + time_duration::from_secs(60 * 60 * 24 * 1);
         // let candles = get_candles(&pool, "MOEX", begin, end, 1000, &Frame::M1).await;
         // display(&candles);
-        strategy::strategy::trade_info(&pool).await;
+        let date = NaiveDate::parse_from_str("2025-05-13", "%Y-%m-%d").expect("failed to date");
+        let info = strategy::strategy::trade_info(&pool, "AFLT", &date).await;
+        for i in info {
+            pretty_print_info(&i);
+        }
     }
+}
+
+fn pretty_print_info(info: &TradeInfo) {
+    let color = match (info.open, info.close) {
+        (o, c) if o > c => "31",
+        (o, c) if o < c => "32",
+        _ => "37",
+    };
+    let max = f32::max(info.open, info.close);
+    let min = f32::min(info.open, info.close);
+    let percent = (max / (min / 100.0)) - 100.0;
+    println!(
+        "\x1b[{color}m{}\topen: {:.2}\tclose: {:.2}\tpercent: {:.2}\tquantity: {:.2}\x1b[0m",
+        info.begin, info.open, info.close, percent, info.sum_quantity,
+    );
 }
 
 fn pretty_print_candle(candle: &Candle) {

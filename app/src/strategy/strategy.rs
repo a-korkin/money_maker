@@ -1,5 +1,6 @@
 use crate::db::pg;
 use crate::db::repo;
+use crate::models::common::TradeInfo;
 use crate::models::common::{Attempt, AvgPeriod, Candle, Frame, Operation, OperationType, Packet};
 use chrono::{Datelike, NaiveDate, NaiveDateTime, Timelike};
 use sqlx::postgres::PgPool;
@@ -7,9 +8,9 @@ use sqlx::postgres::PgPool;
 use uuid::Uuid;
 
 #[allow(dead_code)]
-pub async fn trade_info(pool: &PgPool) {
-    let info = repo::get_trade_info(pool, "AFLT").await;
-    println!("{:#?}", info);
+pub async fn trade_info(pool: &PgPool, security: &str, date: &NaiveDate) -> Vec<TradeInfo> {
+    let info = repo::get_trade_info(pool, security, date).await;
+    info
 }
 
 #[allow(dead_code)]
