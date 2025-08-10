@@ -15,7 +15,7 @@ use db::pg::{
 };
 use dotenv;
 use log::info;
-use models::common::{Candle, Frame, Trade, TradeInfo};
+use models::common::{Candle, Frame, Trade, TradeInfo, TradeType};
 use plotters::prelude::*;
 use sqlx::postgres::PgPool;
 use std::fs;
@@ -97,17 +97,16 @@ pub async fn run() {
 }
 
 fn pretty_print_info(info: &TradeInfo) {
-    let color = match (info.open, info.close) {
-        (o, c) if o > c => "31",
-        (o, c) if o < c => "32",
-        _ => "37",
+    let color = match info.get_type() {
+        TradeType::Sell => "31",
+        TradeType::Buy => "32",
     };
     let max = f32::max(info.open, info.close);
     let min = f32::min(info.open, info.close);
-    let percent = (max / (min / 100.0)) - 100.0;
+    let percent = f32::abs((max / (min / 100.0)) - 100.0);
     println!(
-        "\x1b[{color}m{}\topen: {:.2}\tclose: {:.2}\tpercent: {:.2}\tquantity: {:.2}\x1b[0m",
-        info.begin, info.open, info.close, percent, info.sum_quantity,
+        "\x1b[{color}m{}\topen: {:.2}\tclose: {:.2}\tpercent: {:.2}\tquantity: {:.2}\tbuysell: {}\x1b[0m",
+        info.begin, info.open, info.close, percent, info.sum_quantity, info.buysell,
     );
 }
 

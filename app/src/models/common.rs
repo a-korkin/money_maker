@@ -276,3 +276,25 @@ pub struct TradeInfo {
     pub high: f32,
     pub low: f32,
 }
+
+#[allow(dead_code)]
+pub enum TradeType {
+    Buy,
+    Sell,
+}
+
+#[allow(dead_code)]
+impl TradeInfo {
+    pub fn get_type(&self) -> TradeType {
+        match self
+            .buysell
+            .chars()
+            .nth(0)
+            .expect("failed to get buysell type")
+        {
+            'S' => TradeType::Sell,
+            'B' => TradeType::Buy,
+            _ => unimplemented!(),
+        }
+    }
+}

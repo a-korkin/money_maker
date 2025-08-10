@@ -12,11 +12,13 @@ pub async fn get_trade_info(pool: &PgPool, security: &str, date: &NaiveDate) -> 
         c.high::float4 as high, c.low::float4 as low
     from public.candles as c
     inner join public.securities as s on s.id = c.security_id
-    inner join public.trades as t on t.security_id = c.security_id and c.begin_t = date_bin('1 min', t.trade_datetime, t.trade_datetime::date)
+    inner join public.trades as t on t.security_id = c.security_id 
+        and c.begin_t = date_bin('1 min', t.trade_datetime, t.trade_datetime::date)
     where s.code = $1 
         and c.begin_t::date = $2
     group by c.begin_t, c.open, c.close, c.high, c.low, t.buysell
-    order by c.begin_t, t.buysell;
+    order by c.begin_t, t.buysell
+    limit 100;
         "#;
 
     let result: Vec<TradeInfo> = sqlx::query_as(sql)
