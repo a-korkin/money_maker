@@ -17,8 +17,7 @@ pub async fn get_trade_info(pool: &PgPool, security: &str, date: &NaiveDate) -> 
     where s.code = $1 
         and c.begin_t::date = $2
     group by c.begin_t, c.open, c.close, c.high, c.low, t.buysell
-    order by c.begin_t, t.buysell
-    limit 100;
+    order by c.begin_t, t.buysell;
         "#;
 
     let result: Vec<TradeInfo> = sqlx::query_as(sql)

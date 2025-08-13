@@ -22,6 +22,7 @@ use std::fs;
 use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration as time_duration;
+use strategy::strategy::{best_choice, pretty_print_candle, pretty_print_info, trade_info};
 use utils::logger;
 
 /// Money maker app
@@ -88,41 +89,15 @@ pub async fn run() {
         // let end = begin + time_duration::from_secs(60 * 60 * 24 * 1);
         // let candles = get_candles(&pool, "MOEX", begin, end, 1000, &Frame::M1).await;
         // display(&candles);
+
         let date = NaiveDate::parse_from_str("2025-05-13", "%Y-%m-%d").expect("failed to date");
-        let info = strategy::strategy::trade_info(&pool, "AFLT", &date).await;
-        for i in info {
-            pretty_print_info(&i);
-        }
+        // let info = trade_info(&pool, "AFLT", &date).await;
+        // for i in info {
+        //     pretty_print_info(&i);
+        // }
+
+        best_choice(&pool, "AFLT", &date).await;
     }
-}
-
-fn pretty_print_info(info: &TradeInfo) {
-    let color = match info.get_type() {
-        TradeType::Sell => "31",
-        TradeType::Buy => "32",
-    };
-    let max = f32::max(info.open, info.close);
-    let min = f32::min(info.open, info.close);
-    let percent = f32::abs((max / (min / 100.0)) - 100.0);
-    println!(
-        "\x1b[{color}m{}\topen: {:.2}\tclose: {:.2}\tpercent: {:.2}\tquantity: {:.2}\tbuysell: {}\x1b[0m",
-        info.begin, info.open, info.close, percent, info.sum_quantity, info.buysell,
-    );
-}
-
-fn pretty_print_candle(candle: &Candle) {
-    let color = match (candle.open, candle.close) {
-        (o, c) if o > c => "31",
-        (o, c) if o < c => "32",
-        _ => "37",
-    };
-    let max = f32::max(candle.open, candle.close);
-    let min = f32::min(candle.open, candle.close);
-    let percent = (max / (min / 100.0)) - 100.0;
-    println!(
-        "\x1b[{color}m{}\topen: {:.2}\tclose: {:.2}\tpercent: {:.2}\x1b[0m",
-        candle.begin, candle.open, candle.close, percent
-    );
 }
 
 fn display(candles: &Vec<Candle>) {

@@ -1,16 +1,88 @@
 use crate::db::pg;
 use crate::db::repo;
-use crate::models::common::TradeInfo;
 use crate::models::common::{Attempt, AvgPeriod, Candle, Frame, Operation, OperationType, Packet};
+use crate::models::common::{TradeInfo, TradeType};
+use chrono::NaiveTime;
 use chrono::{Datelike, NaiveDate, NaiveDateTime, Timelike};
 use sqlx::postgres::PgPool;
-// use std::time::Duration;
+use std::time::Duration;
 use uuid::Uuid;
+
+pub fn pretty_print_info(info: &TradeInfo) {
+    let color = match info.get_type() {
+        TradeType::Sell => "31",
+        TradeType::Buy => "32",
+    };
+    let max = f32::max(info.open, info.close);
+    let min = f32::min(info.open, info.close);
+    let percent = f32::abs((max / (min / 100.0)) - 100.0);
+    println!(
+        "\x1b[{color}m{}\topen: {:.2}\tclose: {:.2}\tpercent: {:.2}\tquantity: {:.2}\tbuysell: {}\x1b[0m",
+        info.begin, info.open, info.close, percent, info.sum_quantity, info.buysell,
+    );
+}
+
+pub fn pretty_print_candle(candle: &Candle) {
+    let color = match (candle.open, candle.close) {
+        (o, c) if o > c => "31",
+        (o, c) if o < c => "32",
+        _ => "37",
+    };
+    let max = f32::max(candle.open, candle.close);
+    let min = f32::min(candle.open, candle.close);
+    let percent = (max / (min / 100.0)) - 100.0;
+    println!(
+        "\x1b[{color}m{}\topen: {:.2}\tclose: {:.2}\tpercent: {:.2}\x1b[0m",
+        candle.begin, candle.open, candle.close, percent
+    );
+}
 
 #[allow(dead_code)]
 pub async fn trade_info(pool: &PgPool, security: &str, date: &NaiveDate) -> Vec<TradeInfo> {
     let info = repo::get_trade_info(pool, security, date).await;
     info
+}
+
+pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
+    let time = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+    let begin = NaiveDateTime::new(*date, time);
+    let end = begin + Duration::from_secs(60 * 60 * 24 * 1);
+    let candles = pg::get_candles(pool, security, begin, end, 10000, &Frame::M1).await;
+    let candles = candles
+        .iter()
+        .enumerate()
+        .map(|(a, b)| (a, b))
+        .collect::<Vec<_>>();
+
+    let inner = candles.clone();
+
+    let mut count: usize = 0;
+    let mut current_inner = 0;
+    for (i, x) in candles {
+        if i < current_inner {
+            continue;
+        }
+        if inner.len() >= i + 60 {
+            let hour_candles = &inner[i..i + 60];
+            for (j, y) in hour_candles {
+                let percent = (y.close / (x.close / 100.0)) - 100.0;
+                if percent >= 0.3 {
+                    println!(
+                        "{}-{}: {} => {}, {}",
+                        x.begin.format("%H:%M:%S"),
+                        y.begin.format("%H:%M:%S"),
+                        percent,
+                        x.close,
+                        y.close,
+                    );
+                    count += 1;
+                    current_inner = *j;
+                    break;
+                }
+            }
+        }
+    }
+    println!("count: {count}");
 }
 
 #[allow(dead_code)]
