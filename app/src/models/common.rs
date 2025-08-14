@@ -278,6 +278,7 @@ pub struct TradeInfo {
 }
 
 #[allow(dead_code)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TradeType {
     Buy,
     Sell,

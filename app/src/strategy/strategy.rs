@@ -53,8 +53,9 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
         .enumerate()
         .map(|(a, b)| (a, b))
         .collect::<Vec<_>>();
-
     let inner = candles.clone();
+
+    let trade_info = repo::get_trade_info(pool, security, date).await;
 
     let mut count: usize = 0;
     let mut current_inner = 0;
@@ -67,13 +68,31 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
             for (j, y) in hour_candles {
                 let percent = (y.close / (x.close / 100.0)) - 100.0;
                 if percent >= 0.3 {
+                    let trades = trade_info
+                        .iter()
+                        .filter(|a| a.begin == x.begin)
+                        .collect::<Vec<_>>();
+                    let mut buy_str = String::from("buy: ");
+                    let mut sell_str = String::from("sell: ");
+                    if trades.len() > 0 {
+                        match trades.iter().find(|a| a.get_type() == TradeType::Buy) {
+                            Some(t) => buy_str = format!("{buy_str}{}", t.sum_quantity),
+                            None => buy_str = format!("{buy_str}{}", 0),
+                        }
+                        match trades.iter().find(|a| a.get_type() == TradeType::Sell) {
+                            Some(t) => sell_str = format!("{sell_str}{}", t.sum_quantity),
+                            None => sell_str = format!("{sell_str}{}", 0),
+                        }
+                    }
                     println!(
-                        "{}-{}: {} => {}, {}",
+                        "{}-{}: {:.2} => {:.2}, {:.2} | {}\t{}",
                         x.begin.format("%H:%M:%S"),
                         y.begin.format("%H:%M:%S"),
                         percent,
                         x.close,
                         y.close,
+                        buy_str,
+                        sell_str,
                     );
                     count += 1;
                     current_inner = *j;
