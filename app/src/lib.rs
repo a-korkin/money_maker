@@ -1,7 +1,7 @@
 mod db;
 mod models;
 mod strategy;
-mod terminal;
+// mod terminal;
 mod utils;
 
 use anyhow::{Context, Result};
@@ -55,10 +55,10 @@ pub async fn run() {
     let pool = init_db().await;
 
     let args = Args::parse();
-    if args.terminal {
-        run_terminal(&pool).await;
-        return;
-    }
+    // if args.terminal {
+    //     run_terminal(&pool).await;
+    //     return;
+    // }
 
     // strategy::strategy::run_strategy(&pool).await;
     // return;
@@ -106,9 +106,9 @@ fn display(candles: &Vec<Candle>) {
     }
 }
 
-pub async fn run_terminal(pool: &PgPool) {
-    terminal::terminal::run_terminal(pool).await;
-}
+// pub async fn run_terminal(pool: &PgPool) {
+//     terminal::terminal::run_terminal(pool).await;
+// }
 
 pub enum Kind {
     Candles,

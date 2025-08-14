@@ -114,8 +114,6 @@ dependencies = [
  "dotenv",
  "log",
  "plotters",
- "raylib",
- "regex",
  "reqwest",
  "serde",
  "sqlx",
@@ -2590,6 +2588,14 @@ dependencies = [
  "once_cell",
  "rustix",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "terminal"
+version = "0.1.0"
+dependencies = [
+ "raylib",
+ "regex",
 ]
 
 [[package]]
