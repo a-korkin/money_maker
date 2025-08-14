@@ -59,6 +59,18 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
 
     let mut count: usize = 0;
     let mut current_inner = 0;
+
+    println!(
+        "-------------------------------------------------------------------------------------------------------------------------------------------------"
+    );
+    println!(
+        "{:>8} | {:<8} | {} | {:>10} | {:>10} | {:>8} | {:>8} | {} | {} | {} | {} | {}",
+        "start", "end", "percent", "before", "after", "buy", "sell", "diff quantity", "< 5 min(B)", "< 5 min(S)", "> 5 min(B)", "> 5 min(S)"
+    );
+    println!(
+        "-------------------------------------------------------------------------------------------------------------------------------------------------"
+    );
+
     for (i, x) in candles {
         if i < current_inner {
             continue;
@@ -115,48 +127,49 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
                         })
                         .fold(0, |acc, t| acc + t.sum_quantity);
 
-                    let mut buy_str = String::from("buy: ");
-                    let mut sell_str = String::from("sell: ");
+                    let mut buy_quantity = 0;
+                    let mut sell_quantity = 0;
                     if trades.len() > 0 {
                         match trades.iter().find(|a| a.get_type() == TradeType::Buy) {
                             Some(t) => {
-                                buy_str = format!(
-                                    "{}{:>6} ({},\t{})",
-                                    buy_str, t.sum_quantity, sum_buy_5m_before, sum_buy_5m_after
-                                )
+                                buy_quantity = t.sum_quantity;
                             }
                             None => {
-                                buy_str = format!(
-                                    "{}{:>6} ({},\t{})",
-                                    buy_str, 0, sum_buy_5m_before, sum_buy_5m_after
-                                )
+                                buy_quantity = 0;
                             }
                         }
                         match trades.iter().find(|a| a.get_type() == TradeType::Sell) {
                             Some(t) => {
-                                sell_str = format!(
-                                    "{}{:>6} ({},\t{})",
-                                    sell_str, t.sum_quantity, sum_sell_5m_before, sum_sell_5m_after
-                                )
+                                sell_quantity = t.sum_quantity;
                             }
                             None => {
-                                sell_str = format!(
-                                    "{}{:>6} ({},\t{})",
-                                    sell_str, 0, sum_sell_5m_before, sum_sell_5m_after
-                                )
+                                sell_quantity = 0;
                             }
                         }
                     }
 
                     println!(
-                        "{}-{}: {:.2} => {:.2}, {:.2} | {}\t{}\t",
+                        "{} | {} | {:>7.2} | {:>10.2} | {:>10.2} | {:>8} | {:>8} | {:>13.5} | {:>10.2} | {:>10.2} | {:>10.2} | {:>10.2}",
                         x.begin.format("%H:%M:%S"),
                         y.begin.format("%H:%M:%S"),
                         percent,
                         x.close,
                         y.close,
-                        buy_str,
-                        sell_str,
+                        buy_quantity,
+                        sell_quantity,
+                        if buy_quantity == 0 {
+                            1.0f32
+                        } else {
+                            buy_quantity as f32
+                        } / if sell_quantity == 0 {
+                            1.0f32
+                        } else {
+                            sell_quantity as f32
+                        },
+                        sum_buy_5m_before,
+                        sum_sell_5m_before,
+                        sum_buy_5m_after,
+                        sum_sell_5m_after,
                     );
                     count += 1;
                     current_inner = *j;
