@@ -60,16 +60,22 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
     let mut count: usize = 0;
     let mut current_inner = 0;
 
+    let divider = format!("{:-<125}", "");
+    println!("{divider}");
     println!(
-        "-------------------------------------------------------------------------------------------------------------------------------------------------"
+        "{:>8} | {:<8} | {} | {:>10} | {:>10} | {:>8} | {:>8} | {:>13} | {:>13} | {:>13}",
+        "start",
+        "end",
+        "percent",
+        "before",
+        "after",
+        "buy",
+        "sell",
+        "quant",
+        "< 5 min quant",
+        "> 5 min quant",
     );
-    println!(
-        "{:>8} | {:<8} | {} | {:>10} | {:>10} | {:>8} | {:>8} | {} | {} | {} | {} | {}",
-        "start", "end", "percent", "before", "after", "buy", "sell", "diff quantity", "< 5 min(B)", "< 5 min(S)", "> 5 min(B)", "> 5 min(S)"
-    );
-    println!(
-        "-------------------------------------------------------------------------------------------------------------------------------------------------"
-    );
+    println!("{divider}");
 
     for (i, x) in candles {
         if i < current_inner {
@@ -148,8 +154,14 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
                         }
                     }
 
+                    let (prefix, suffix) = match percent >= 0.3 {
+                        true => ("\x1b[1;32m", "\x1b[0m"),
+                        false => ("", ""),
+                    };
+
                     println!(
-                        "{} | {} | {:>7.2} | {:>10.2} | {:>10.2} | {:>8} | {:>8} | {:>13.5} | {:>10.2} | {:>10.2} | {:>10.2} | {:>10.2}",
+                        "{}{} | {} | {:>7.2} | {:>10.2} | {:>10.2} | {:>8} | {:>8} | {:>13.2} | {:>13.2} | {:>13.2}{}",
+                        prefix,
                         x.begin.format("%H:%M:%S"),
                         y.begin.format("%H:%M:%S"),
                         percent,
@@ -166,10 +178,9 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
                         } else {
                             sell_quantity as f32
                         },
-                        sum_buy_5m_before,
-                        sum_sell_5m_before,
-                        sum_buy_5m_after,
-                        sum_sell_5m_after,
+                        sum_buy_5m_before as f32 / sum_sell_5m_before as f32,
+                        sum_buy_5m_after as f32 / sum_sell_5m_after as f32,
+                        suffix,
                     );
                     count += 1;
                     current_inner = *j;
