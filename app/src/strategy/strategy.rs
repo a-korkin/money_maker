@@ -86,6 +86,7 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
         let hour_candles = &inner[i..i + 60];
         for (j, y) in hour_candles {
             let percent = (y.close / (x.close / 100.0)) - 100.0;
+
             if percent >= 0.3 {
                 let scope_trades = trade_info
                     .iter()
@@ -99,41 +100,6 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
                     .iter()
                     .filter(|a| a.begin == x.begin)
                     .collect::<Vec<_>>();
-
-                let sum_buy_5m_before = scope_trades
-                    .iter()
-                    .filter(|a| {
-                        a.begin >= x.begin - Duration::from_secs(60 * 5)
-                            && a.begin < x.begin
-                            && a.get_type() == TradeType::Buy
-                    })
-                    .fold(0, |acc, t| acc + t.sum_quantity);
-                let sum_sell_5m_before = scope_trades
-                    .iter()
-                    .filter(|a| {
-                        a.begin >= x.begin - Duration::from_secs(60 * 5)
-                            && a.begin < x.begin
-                            && a.get_type() == TradeType::Sell
-                    })
-                    .fold(0, |acc, t| acc + t.sum_quantity);
-
-                let sum_buy_5m_after = scope_trades
-                    .iter()
-                    .filter(|a| {
-                        a.begin <= x.begin + Duration::from_secs(60 * 5)
-                            && a.begin > x.begin
-                            && a.get_type() == TradeType::Buy
-                    })
-                    .fold(0, |acc, t| acc + t.sum_quantity);
-                let sum_sell_5m_after = scope_trades
-                    .iter()
-                    .filter(|a| {
-                        a.begin <= x.begin + Duration::from_secs(60 * 5)
-                            && a.begin > x.begin
-                            && a.get_type() == TradeType::Sell
-                    })
-                    .fold(0, |acc, t| acc + t.sum_quantity);
-
                 let mut buy_quantity = 0;
                 let mut sell_quantity = 0;
                 if trades.len() > 0 {
@@ -165,6 +131,9 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
                     sell_quantity as f32
                 };
 
+                let (sum_buy_5m_before, sum_sell_5m_before, sum_buy_5m_after, sum_sell_5m_after) =
+                    get_sum_quantity_scope(&scope_trades, &x.begin);
+
                 let quant_before = sum_buy_5m_before as f32 / sum_sell_5m_before as f32;
                 let quant_after = sum_buy_5m_after as f32 / sum_sell_5m_after as f32;
 
@@ -189,6 +158,52 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
     }
     print_trades_result(&trades_result);
     println!("count: {count}");
+}
+
+fn get_sum_quantity_scope(
+    scope_trades: &Vec<&TradeInfo>,
+    datetime: &NaiveDateTime,
+) -> (i32, i32, i32, i32) {
+    let sum_buy_5m_before = scope_trades
+        .iter()
+        .filter(|a| {
+            a.begin >= *datetime - Duration::from_secs(60 * 5)
+                && a.begin < *datetime
+                && a.get_type() == TradeType::Buy
+        })
+        .fold(0, |acc, t| acc + t.sum_quantity);
+    let sum_sell_5m_before = scope_trades
+        .iter()
+        .filter(|a| {
+            a.begin >= *datetime - Duration::from_secs(60 * 5)
+                && a.begin < *datetime
+                && a.get_type() == TradeType::Sell
+        })
+        .fold(0, |acc, t| acc + t.sum_quantity);
+
+    let sum_buy_5m_after = scope_trades
+        .iter()
+        .filter(|a| {
+            a.begin <= *datetime + Duration::from_secs(60 * 5)
+                && a.begin > *datetime
+                && a.get_type() == TradeType::Buy
+        })
+        .fold(0, |acc, t| acc + t.sum_quantity);
+    let sum_sell_5m_after = scope_trades
+        .iter()
+        .filter(|a| {
+            a.begin <= *datetime + Duration::from_secs(60 * 5)
+                && a.begin > *datetime
+                && a.get_type() == TradeType::Sell
+        })
+        .fold(0, |acc, t| acc + t.sum_quantity);
+
+    (
+        sum_buy_5m_before,
+        sum_sell_5m_before,
+        sum_buy_5m_after,
+        sum_sell_5m_after,
+    )
 }
 
 fn print_header() {
