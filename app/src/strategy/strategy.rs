@@ -43,6 +43,19 @@ pub async fn trade_info(pool: &PgPool, security: &str, date: &NaiveDate) -> Vec<
     info
 }
 
+pub struct TradesResult {
+    pub start: NaiveDateTime,
+    pub end: Option<NaiveDateTime>,
+    pub percent: f32,
+    pub before: f32,
+    pub after: f32,
+    pub buy: i32,
+    pub sell: i32,
+    pub quant: f32,
+    pub quant_before: f32,
+    pub quant_after: f32,
+}
+
 pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
     let time = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
     let begin = NaiveDateTime::new(*date, time);
@@ -60,22 +73,8 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
     let mut count: usize = 0;
     let mut current_inner = 0;
 
-    let divider = format!("{:-<125}", "");
-    println!("{divider}");
-    println!(
-        "{:>8} | {:<8} | {} | {:>10} | {:>10} | {:>8} | {:>8} | {:>13} | {:>13} | {:>13}",
-        "start",
-        "end",
-        "percent",
-        "before",
-        "after",
-        "buy",
-        "sell",
-        "quant",
-        "< 5 min quant",
-        "> 5 min quant",
-    );
-    println!("{divider}");
+    print_header();
+    let mut trades_result: Vec<TradesResult> = vec![];
 
     for (i, x) in candles {
         if i < current_inner {
@@ -154,34 +153,32 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
                         }
                     }
 
-                    let (prefix, suffix) = match percent >= 0.3 {
-                        true => ("\x1b[1;32m", "\x1b[0m"),
-                        false => ("", ""),
+                    let quant_percent = if buy_quantity == 0 {
+                        1.0f32
+                    } else {
+                        buy_quantity as f32
+                    } / if sell_quantity == 0 {
+                        1.0f32
+                    } else {
+                        sell_quantity as f32
                     };
 
-                    println!(
-                        "{}{} | {} | {:>7.2} | {:>10.2} | {:>10.2} | {:>8} | {:>8} | {:>13.2} | {:>13.2} | {:>13.2}{}",
-                        prefix,
-                        x.begin.format("%H:%M:%S"),
-                        y.begin.format("%H:%M:%S"),
+                    let quant_before = sum_buy_5m_before as f32 / sum_sell_5m_before as f32;
+                    let quant_after = sum_buy_5m_after as f32 / sum_sell_5m_after as f32;
+
+                    trades_result.push(TradesResult {
+                        start: x.begin,
+                        end: Some(y.begin),
                         percent,
-                        x.close,
-                        y.close,
-                        buy_quantity,
-                        sell_quantity,
-                        if buy_quantity == 0 {
-                            1.0f32
-                        } else {
-                            buy_quantity as f32
-                        } / if sell_quantity == 0 {
-                            1.0f32
-                        } else {
-                            sell_quantity as f32
-                        },
-                        sum_buy_5m_before as f32 / sum_sell_5m_before as f32,
-                        sum_buy_5m_after as f32 / sum_sell_5m_after as f32,
-                        suffix,
-                    );
+                        before: x.close,
+                        after: y.close,
+                        buy: buy_quantity,
+                        sell: sell_quantity,
+                        quant: quant_percent,
+                        quant_before,
+                        quant_after,
+                    });
+
                     count += 1;
                     current_inner = *j;
                     break;
@@ -189,7 +186,54 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
             }
         }
     }
+    print_trades_result(&trades_result);
     println!("count: {count}");
+}
+
+fn print_header() {
+    let divider = format!("{:-<125}", "");
+    println!("{divider}");
+    println!(
+        "{:>8} | {:>8} | {} | {:>10} | {:>10} | {:>8} | {:>8} | {:>13} | {:>13} | {:>13}",
+        "start",
+        "end",
+        "percent",
+        "before",
+        "after",
+        "buy",
+        "sell",
+        "quant",
+        "< 5 min quant",
+        "> 5 min quant",
+    );
+    println!("{divider}");
+}
+
+fn print_trades_result(trades: &Vec<TradesResult>) {
+    let fmt = "%H:%M:%S";
+    for trade in trades {
+        let end = match trade.end {
+            Some(val) => val.format(fmt).to_string(),
+            None => String::from("--:--:--"),
+        };
+        let (prefix, suffix) = match trade.percent >= 0.3 {
+            true => ("\x1b[1;32m", "\x1b[0m"),
+            false => ("", ""),
+        };
+        println!("{}{} | {} | {:>7.2} | {:>10.2} | {:>10.2} | {:>8} | {:>8} | {:>13.2} | {:>13.2} | {:>13.2}{}", 
+            prefix,
+            trade.start.format(fmt),
+            end,
+            trade.percent,
+            trade.before,
+            trade.after,
+            trade.buy,
+            trade.sell,
+            trade.quant,
+            trade.quant_before,
+            trade.quant_after,
+            suffix,);
+    }
 }
 
 #[allow(dead_code)]
