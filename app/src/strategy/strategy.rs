@@ -83,37 +83,37 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
         if inner.len() < i + 60 {
             continue;
         }
+        let mut is_good = false;
         let hour_candles = &inner[i..i + 60];
+        let scope_trades = trade_info
+            .iter()
+            .filter(|a| {
+                a.begin >= x.begin - Duration::from_secs(60 * 5)
+                    && a.begin <= x.begin + Duration::from_secs(60 * 5)
+            })
+            .collect::<Vec<_>>();
+
+        let (buy_quantity, sell_quantity) = get_quantities(&scope_trades, &x.begin);
+
+        let quant_percent = if buy_quantity == 0 {
+            1.0f32
+        } else {
+            buy_quantity as f32
+        } / if sell_quantity == 0 {
+            1.0f32
+        } else {
+            sell_quantity as f32
+        };
+
+        let (sum_buy_5m_before, sum_sell_5m_before, sum_buy_5m_after, sum_sell_5m_after) =
+            get_sum_quantity_scope(&scope_trades, &x.begin);
+
+        let quant_before = sum_buy_5m_before as f32 / sum_sell_5m_before as f32;
+        let quant_after = sum_buy_5m_after as f32 / sum_sell_5m_after as f32;
+
         for (j, y) in hour_candles {
             let percent = (y.close / (x.close / 100.0)) - 100.0;
-
-            let scope_trades = trade_info
-                .iter()
-                .filter(|a| {
-                    a.begin >= x.begin - Duration::from_secs(60 * 5)
-                        && a.begin <= x.begin + Duration::from_secs(60 * 5)
-                })
-                .collect::<Vec<_>>();
-
             if percent >= 0.3 {
-                let (buy_quantity, sell_quantity) = get_quantities(&scope_trades, &x.begin);
-
-                let quant_percent = if buy_quantity == 0 {
-                    1.0f32
-                } else {
-                    buy_quantity as f32
-                } / if sell_quantity == 0 {
-                    1.0f32
-                } else {
-                    sell_quantity as f32
-                };
-
-                let (sum_buy_5m_before, sum_sell_5m_before, sum_buy_5m_after, sum_sell_5m_after) =
-                    get_sum_quantity_scope(&scope_trades, &x.begin);
-
-                let quant_before = sum_buy_5m_before as f32 / sum_sell_5m_before as f32;
-                let quant_after = sum_buy_5m_after as f32 / sum_sell_5m_after as f32;
-
                 trades_result.push(TradesResult {
                     start: x.begin,
                     end: Some(y.begin),
@@ -129,6 +129,7 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
 
                 count += 1;
                 current_inner = *j;
+                is_good = true;
                 break;
             }
         }
