@@ -83,7 +83,7 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
         if inner.len() < i + 60 {
             continue;
         }
-        let mut is_good = false;
+        let mut found = false;
         let hour_candles = &inner[i..i + 60];
         let scope_trades = trade_info
             .iter()
@@ -129,9 +129,23 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
 
                 count += 1;
                 current_inner = *j;
-                is_good = true;
+                found = true;
                 break;
             }
+        }
+        if !found {
+            trades_result.push(TradesResult {
+                start: x.begin,
+                end: None,
+                percent: 0.0,
+                before: x.close,
+                after: 0.0,
+                buy: buy_quantity,
+                sell: sell_quantity,
+                quant: quant_percent,
+                quant_before,
+                quant_after,
+            });
         }
     }
     print_trades_result(&trades_result);
