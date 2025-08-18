@@ -87,39 +87,16 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
         for (j, y) in hour_candles {
             let percent = (y.close / (x.close / 100.0)) - 100.0;
 
-            if percent >= 0.3 {
-                let scope_trades = trade_info
-                    .iter()
-                    .filter(|a| {
-                        a.begin >= x.begin - Duration::from_secs(60 * 5)
-                            && a.begin <= x.begin + Duration::from_secs(60 * 5)
-                    })
-                    .collect::<Vec<_>>();
+            let scope_trades = trade_info
+                .iter()
+                .filter(|a| {
+                    a.begin >= x.begin - Duration::from_secs(60 * 5)
+                        && a.begin <= x.begin + Duration::from_secs(60 * 5)
+                })
+                .collect::<Vec<_>>();
 
-                let trades = scope_trades
-                    .iter()
-                    .filter(|a| a.begin == x.begin)
-                    .collect::<Vec<_>>();
-                let mut buy_quantity = 0;
-                let mut sell_quantity = 0;
-                if trades.len() > 0 {
-                    match trades.iter().find(|a| a.get_type() == TradeType::Buy) {
-                        Some(t) => {
-                            buy_quantity = t.sum_quantity;
-                        }
-                        None => {
-                            buy_quantity = 0;
-                        }
-                    }
-                    match trades.iter().find(|a| a.get_type() == TradeType::Sell) {
-                        Some(t) => {
-                            sell_quantity = t.sum_quantity;
-                        }
-                        None => {
-                            sell_quantity = 0;
-                        }
-                    }
-                }
+            if percent >= 0.3 {
+                let (buy_quantity, sell_quantity) = get_quantities(&scope_trades, &x.begin);
 
                 let quant_percent = if buy_quantity == 0 {
                     1.0f32
@@ -158,6 +135,34 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
     }
     print_trades_result(&trades_result);
     println!("count: {count}");
+}
+
+fn get_quantities(scope_trades: &Vec<&TradeInfo>, datetime: &NaiveDateTime) -> (i32, i32) {
+    let trades = scope_trades
+        .iter()
+        .filter(|a| a.begin == *datetime)
+        .collect::<Vec<_>>();
+    let mut buy_quantity = 0;
+    let mut sell_quantity = 0;
+    if trades.len() > 0 {
+        match trades.iter().find(|a| a.get_type() == TradeType::Buy) {
+            Some(t) => {
+                buy_quantity = t.sum_quantity;
+            }
+            None => {
+                buy_quantity = 0;
+            }
+        }
+        match trades.iter().find(|a| a.get_type() == TradeType::Sell) {
+            Some(t) => {
+                sell_quantity = t.sum_quantity;
+            }
+            None => {
+                sell_quantity = 0;
+            }
+        }
+    }
+    (buy_quantity, sell_quantity)
 }
 
 fn get_sum_quantity_scope(
