@@ -54,6 +54,7 @@ pub struct TradesResult {
     pub quant: f32,
     pub quant_before: f32,
     pub quant_after: f32,
+    pub quant_day: f32,
 }
 
 pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
@@ -76,6 +77,9 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
     print_header();
     let mut trades_result: Vec<TradesResult> = vec![];
 
+    let mut sum_buys = 0;
+    let mut sum_sells = 0;
+
     for (i, x) in candles {
         if i < current_inner {
             continue;
@@ -94,6 +98,8 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
             .collect::<Vec<_>>();
 
         let (buy_quantity, sell_quantity) = get_quantities(&scope_trades, &x.begin);
+        sum_buys += buy_quantity;
+        sum_sells += sell_quantity;
 
         let quant_percent = if buy_quantity == 0 {
             1.0f32
@@ -125,10 +131,15 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
                     quant: quant_percent,
                     quant_before,
                     quant_after,
+                    quant_day: if sum_sells == 0 {
+                        sum_buys as f32
+                    } else {
+                        sum_buys as f32 / sum_sells as f32
+                    },
                 });
 
                 count += 1;
-                current_inner = *j;
+                // current_inner = *j;
                 found = true;
                 break;
             }
@@ -145,6 +156,11 @@ pub async fn best_choice(pool: &PgPool, security: &str, date: &NaiveDate) {
                 quant: quant_percent,
                 quant_before,
                 quant_after,
+                quant_day: if sum_sells == 0 {
+                    sum_buys as f32
+                } else {
+                    sum_buys as f32 / sum_sells as f32
+                },
             });
         }
     }
@@ -230,7 +246,7 @@ fn print_header() {
     let divider = format!("{:-<125}", "");
     println!("{divider}");
     println!(
-        "{:>8} | {:>8} | {} | {:>10} | {:>10} | {:>8} | {:>8} | {:>13} | {:>13} | {:>13}",
+        "{:>8} | {:>8} | {} | {:>10} | {:>10} | {:>8} | {:>8} | {:>13} | {:>13} | {:>13} | {:>13}",
         "start",
         "end",
         "percent",
@@ -241,6 +257,7 @@ fn print_header() {
         "quant",
         "< 5 min quant",
         "> 5 min quant",
+        "day",
     );
     println!("{divider}");
 }
@@ -257,7 +274,7 @@ fn print_trades_result(trades: &Vec<TradesResult>) {
             false => ("", ""),
         };
         println!(
-            "{}{} | {} | {:>7.2} | {:>10.2} | {:>10.2} | {:>8} | {:>8} | {:>13.2} | {:>13.2} | {:>13.2}{}",
+            "{}{} | {} | {:>7.2} | {:>10.2} | {:>10.2} | {:>8} | {:>8} | {:>13.2} | {:>13.2} | {:>13.2} | {:>13.2}{}",
             prefix,
             trade.start.format(fmt),
             end,
@@ -269,6 +286,7 @@ fn print_trades_result(trades: &Vec<TradesResult>) {
             trade.quant,
             trade.quant_before,
             trade.quant_after,
+            trade.quant_day,
             suffix,
         );
     }
