@@ -1,7 +1,6 @@
 pub mod db;
 pub mod models;
 mod strategy;
-// mod terminal;
 mod utils;
 
 use anyhow::{Context, Result};
@@ -41,10 +40,6 @@ struct Args {
     #[arg(short, long)]
     add: bool,
 
-    /// Run terminal
-    #[arg(short, long)]
-    terminal: bool,
-
     /// Show candles
     #[arg(short, long)]
     display: bool,
@@ -55,22 +50,11 @@ pub async fn run() {
     let pool = init_db().await;
 
     let args = Args::parse();
-    // if args.terminal {
-    //     run_terminal(&pool).await;
-    //     return;
-    // }
 
     // strategy::strategy::run_strategy(&pool).await;
     // return;
 
-    let securities = match args.secs.as_str() {
-        "all" => get_all_securities(&pool).await,
-        _ => args
-            .secs
-            .split(",")
-            .map(|s| s.trim().to_uppercase().to_owned())
-            .collect::<Vec<String>>(),
-    };
+    let securities = get_securities(&pool, &args).await;
 
     if args.kind.as_str() != "none" {
         let kind = Kind::from(args.kind.as_str());
@@ -90,14 +74,35 @@ pub async fn run() {
         // let candles = get_candles(&pool, "MOEX", begin, end, 1000, &Frame::M1).await;
         // display(&candles);
 
-        let date = NaiveDate::parse_from_str("2025-05-13", "%Y-%m-%d").expect("failed to date");
+        // let date = NaiveDate::parse_from_str("2025-05-13", "%Y-%m-%d").expect("failed to date");
         // let info = trade_info(&pool, "AFLT", &date).await;
         // for i in info {
         //     pretty_print_info(&i);
         // }
 
-        best_choice(&pool, "AFLT", &date).await;
+        // best_choice(&pool, "AFLT", &date).await;
     }
+}
+
+async fn get_securities(pool: &PgPool, args: &Args) -> Vec<String> {
+    let securities = match args.secs.as_str() {
+        "all" => get_all_securities(&pool).await,
+        _ => args
+            .secs
+            .split(",")
+            .map(|s| s.trim().to_uppercase().to_owned())
+            .collect::<Vec<String>>(),
+    };
+
+    if securities.is_empty() {
+        let securities = dotenv::var("SECURITIES")
+            .expect("failed to get SECURITIES")
+            .split_whitespace()
+            .map(|s| s.to_owned())
+            .collect::<Vec<_>>();
+        return securities;
+    }
+    return securities;
 }
 
 fn display(candles: &Vec<Candle>) {
@@ -105,10 +110,6 @@ fn display(candles: &Vec<Candle>) {
         pretty_print_candle(candle);
     }
 }
-
-// pub async fn run_terminal(pool: &PgPool) {
-//     terminal::terminal::run_terminal(pool).await;
-// }
 
 pub enum Kind {
     Candles,

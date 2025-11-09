@@ -39,7 +39,8 @@ struct UiElements<'a> {
 }
 
 pub async fn run_terminal(pool: &PgPool) {
-    let mut begin = NaiveDateTime::parse_from_str("2025-04-26 10:00:00", DATE_TIME_FMT)
+    // let mut begin = NaiveDateTime::parse_from_str("2025-04-26 10:00:00", DATE_TIME_FMT)
+    let mut begin = NaiveDateTime::parse_from_str("2025-10-15 10:00:00", DATE_TIME_FMT)
         .expect("failed to convert datetime");
     let mut end = begin + Duration::from_secs(60 * 60 * 24 * 1);
 
