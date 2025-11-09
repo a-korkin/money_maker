@@ -54,7 +54,7 @@ pub async fn run_terminal(pool: &PgPool) {
     let mut current_frame = frames[frame_active as usize];
     let mut frame_edit: bool = false;
 
-    let (mut candles, mut coords) = fetch_data(
+    let data = fetch_data(
         pool,
         selected_security,
         begin,
@@ -62,6 +62,13 @@ pub async fn run_terminal(pool: &PgPool) {
         &Frame::from(current_frame),
     )
     .await;
+
+    if !data.is_some() {
+        println!("Has no data for: {:#}, {}", begin, selected_security);
+        return;
+    }
+
+    let (mut candles, mut coords) = data.unwrap();
 
     let mut trades = pg::get_trades_view(
         pool,
@@ -130,7 +137,8 @@ pub async fn run_terminal(pool: &PgPool) {
                 end,
                 &Frame::from(current_frame),
             )
-            .await;
+            .await
+            .unwrap();
         }
 
         if draw_datepicker(
@@ -149,7 +157,8 @@ pub async fn run_terminal(pool: &PgPool) {
                 end,
                 &Frame::from(current_frame),
             )
-            .await;
+            .await
+            .unwrap();
         }
 
         if draw_dropdown(
@@ -169,7 +178,8 @@ pub async fn run_terminal(pool: &PgPool) {
                     end,
                     &Frame::from(current_frame),
                 )
-                .await;
+                .await
+                .unwrap();
             }
         }
 
@@ -190,7 +200,8 @@ pub async fn run_terminal(pool: &PgPool) {
                     end,
                     &Frame::from(current_frame),
                 )
-                .await;
+                .await
+                .unwrap();
             }
         }
 
@@ -228,13 +239,16 @@ async fn fetch_data<'a>(
     begin: NaiveDateTime,
     end: NaiveDateTime,
     frame: &Frame,
-) -> (Vec<Candle>, DrawCoords) {
+) -> Option<(Vec<Candle>, DrawCoords)> {
     let start_pos = Vector2::new(300.0, 20.0);
     let end_pos = Vector2::new(W - 20.0, 240.0 - 20.0);
 
     let limit = ((end_pos.x - start_pos.x) / CANDLE_W) as i32 - 1;
 
     let candles = pg::get_candles(pool, &security, begin, end, limit, frame).await;
+    if candles.is_empty() {
+        return None;
+    }
     let mut min_low: f32 = candles.first().unwrap().low;
     let mut max_high: f32 = 0_f32;
 
@@ -259,7 +273,7 @@ async fn fetch_data<'a>(
         max_y,
     };
 
-    return (candles, coords);
+    return Some((candles, coords));
 }
 
 fn draw_axis(d: &mut RaylibDrawHandle, font: &Font, coords: &DrawCoords) {
@@ -566,7 +580,9 @@ async fn draw_ui<'a>(
         ui.securities_edit = !ui.securities_edit;
         if ui.secs[ui.securities_active as usize] != ui.selected_security {
             ui.selected_security = ui.secs[ui.securities_active as usize];
-            (*candles, *coords) = fetch_data(pool, ui.selected_security, begin, end, frame).await;
+            (*candles, *coords) = fetch_data(pool, ui.selected_security, begin, end, frame)
+                .await
+                .unwrap();
         }
     }
 }
