@@ -1,5 +1,5 @@
-mod db;
-mod models;
+pub mod db;
+pub mod models;
 mod strategy;
 // mod terminal;
 mod utils;

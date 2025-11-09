@@ -1,5 +1,5 @@
-use crate::db::pg;
-use crate::models::common::{Candle, Frame, TradeView};
+use app::db::pg;
+use app::models::common::{Candle, Frame, TradeView};
 use chrono::{Datelike, NaiveDateTime, Timelike};
 use raylib::prelude::GuiControlProperty::*;
 use raylib::prelude::GuiTextAlignment::*;
