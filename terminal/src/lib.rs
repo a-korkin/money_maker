@@ -15,6 +15,7 @@ const CANDLE_W: f32 = 12.0;
 const COUNT_Y: f32 = 10.0;
 const DATE_TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 const TRADES_DELTA_Y: f32 = 300.0;
+const BACKGROUND_COLOR: Color = Color::new(23, 35, 46, 0);
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -112,8 +113,7 @@ pub async fn run_terminal(pool: &PgPool) {
 
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
-
-        d.clear_background(Color::WHITE);
+        d.clear_background(BACKGROUND_COLOR);
         d.gui_set_alpha(alpha);
 
         //draw ui
