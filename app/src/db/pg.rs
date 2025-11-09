@@ -255,7 +255,8 @@ pub async fn get_candles(
         c.low::float4 as low, 
         c.value::float4 as value, 
         c.volume::float4 as volume, 
-        c.begin_t as begin, c.end_t as end
+        c.begin_t::timestamp as begin, 
+        c.end_t::timestamp as end
     from public.candles as c
     inner join public.securities as s on s.id = c.security_id
     where s.code = $1
@@ -273,16 +274,19 @@ pub async fn get_candles(
         select 
             (array_agg(open order by c.begin_t))[1]::float4 as open, 
             (array_agg(close order by c.end_t desc))[1]::float4 as close, 
-            max(c.high)::float4 as high, min(c.low)::float4 as low, 
+            max(c.high)::float4 as high,
+            min(c.low)::float4 as low, 
             sum(c.value)::float4 as value, 
             sum(c.volume)::float4 as volume, 
-            min(c.begin_t) as begin, max(c.end_t) as end,
-            c.begin_t::date as cdate, extract(hour from date_trunc('hour', c.begin_t)) as hour
+            min(c.begin_t)::timestamp as begin, 
+            max(c.end_t)::timestamp as end,
+            c.begin_t::date as cdate, 
+            extract(hour from date_trunc('hour', c.begin_t)) as hour
         from public.candles as c
         inner join public.securities as s on s.id = c.security_id
         where s.code = $1
-            and c.begin_t::date >= $2
-            and c.end_t::date <= $3
+            and c.begin_t::date >= $2::date
+            and c.end_t::date <= $3::date
         group by cdate, hour
     ) as a
     order by a.begin
@@ -305,8 +309,8 @@ pub async fn get_candles(
         from public.candles as c
         inner join public.securities as s on s.id = c.security_id
         where s.code = $1
-            and c.begin_t::date >= $2
-            and c.end_t::date <= $3
+            and c.begin_t::date >= $2::date
+            and c.end_t::date <= $3::date
         group by cdate
     ) as a
     order by a.begin

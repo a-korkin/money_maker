@@ -17,6 +17,7 @@ const DATE_TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 const TRADES_DELTA_Y: f32 = 300.0;
 
 #[allow(dead_code)]
+#[derive(Debug)]
 struct DrawCoords {
     start_pos: Vector2,
     end_pos: Vector2,
@@ -242,9 +243,7 @@ async fn fetch_data<'a>(
 ) -> Option<(Vec<Candle>, DrawCoords)> {
     let start_pos = Vector2::new(300.0, 20.0);
     let end_pos = Vector2::new(W - 20.0, 240.0 - 20.0);
-
     let limit = ((end_pos.x - start_pos.x) / CANDLE_W) as i32 - 1;
-
     let candles = pg::get_candles(pool, &security, begin, end, limit, frame).await;
     if candles.is_empty() {
         return None;
