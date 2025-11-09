@@ -309,7 +309,7 @@ fn draw_axis(d: &mut RaylibDrawHandle, font: &Font, coords: &DrawCoords) {
             Vector2::new(coords.start_pos.x - offset, cur_y - 8_f32),
             15.0,
             0.0,
-            Color::BLACK,
+            Color::WHEAT,
         );
         cur_y += step;
         label -= add;
@@ -375,8 +375,8 @@ fn draw_graphs(
         // print time labels on x-axis
         match frame {
             Frame::M1 => draw_frames_m1(d, candle.begin, &mut day, Vector2::new(x, y), font),
-            Frame::H1 => draw_frames_h1(d, candle.begin, &mut day, Vector2::new(x, y)),
-            Frame::D1 => draw_frames_d1(d, candle.begin, &mut month, Vector2::new(x, y)),
+            Frame::H1 => draw_frames_h1(d, candle.begin, &mut day, Vector2::new(x, y), font),
+            Frame::D1 => draw_frames_d1(d, candle.begin, &mut month, Vector2::new(x, y), font),
         }
     }
 }
@@ -429,7 +429,7 @@ fn draw_frames_m1(
             Vector2::new(position.x + offset, position.y + 8.0),
             15.0,
             0.0,
-            Color::BLACK,
+            Color::WHEAT,
         );
     }
 
@@ -442,7 +442,7 @@ fn draw_frames_m1(
             Vector2::new(position.x + offset, position.y + 20.0),
             15.0,
             0.0,
-            Color::BLACK,
+            Color::WHEAT,
         );
     }
 }
@@ -452,6 +452,7 @@ fn draw_frames_d1(
     date: NaiveDateTime,
     month: &mut u32,
     position: Vector2,
+    font: &Font,
 ) {
     let day = date.day();
     let offset = match day {
@@ -462,12 +463,12 @@ fn draw_frames_d1(
 
     if day == 1 || day % 2 == 0 {
         d.draw_text_ex(
-            d.get_font_default(),
+            font,
             &day.to_string(),
             Vector2::new(position.x + offset, position.y + 8.0),
-            10.0,
+            15.0,
             1.0,
-            Color::BLACK,
+            Color::WHEAT,
         );
     }
 
@@ -475,17 +476,23 @@ fn draw_frames_d1(
     if current_month != *month {
         *month = current_month;
         d.draw_text_ex(
-            d.get_font_default(),
+            font,
             &date.format("%Y-%m").to_string(),
             Vector2::new(position.x - 8.0, position.y + 20.0),
-            10.0,
+            15.0,
             1.0,
-            Color::BLACK,
+            Color::WHEAT,
         );
     }
 }
 
-fn draw_frames_h1(d: &mut RaylibDrawHandle, date: NaiveDateTime, day: &mut u32, position: Vector2) {
+fn draw_frames_h1(
+    d: &mut RaylibDrawHandle,
+    date: NaiveDateTime,
+    day: &mut u32,
+    position: Vector2,
+    font: &Font,
+) {
     let hour = date.hour();
     let offset = match hour {
         0..=9 => 15.0,
@@ -494,24 +501,24 @@ fn draw_frames_h1(d: &mut RaylibDrawHandle, date: NaiveDateTime, day: &mut u32, 
     };
     if hour % 3 == 0 {
         d.draw_text_ex(
-            d.get_font_default(),
+            font,
             &hour.to_string(),
             Vector2::new(position.x + offset, position.y + 8.0),
-            10.0,
+            15.0,
             1.0,
-            Color::BLACK,
+            Color::WHEAT,
         );
     }
     let current_day = date.day();
     if current_day != *day {
         *day = current_day;
         d.draw_text_ex(
-            d.get_font_default(),
+            font,
             &date.format("%Y-%m-%d").to_string(),
             Vector2::new(position.x - 14.0, position.y + 20.0),
-            10.0,
+            15.0,
             1.0,
-            Color::BLACK,
+            Color::WHEAT,
         );
     }
 }
@@ -537,7 +544,7 @@ async fn draw_ui<'a>(
         Vector2::new(25.0, 90.0),
         10.0,
         1.0,
-        Color::BLACK,
+        Color::WHEAT,
     );
     if d.gui_text_box(
         Rectangle::new(25.0, 100.0, 125.0, 30.0),
@@ -553,7 +560,7 @@ async fn draw_ui<'a>(
         Vector2::new(25.0, 135.0),
         10.0,
         1.0,
-        Color::BLACK,
+        Color::WHEAT,
     );
     if d.gui_text_box(
         Rectangle::new(25.0, 145.0, 125.0, 30.0),
@@ -600,7 +607,7 @@ fn draw_datepicker(
         Vector2::new(position.x, position.y - 5.0),
         15.0,
         0.0,
-        Color::BLACK,
+        Color::WHEAT,
     );
     if d.gui_text_box(
         Rectangle::new(position.x, position.y + 10.0, 186.0, 30.0),
@@ -699,7 +706,7 @@ fn draw_trades(
             Vector2::new(coords.start_pos.x - offset, cur_y - 8_f32),
             15.0,
             0.0,
-            Color::BLACK,
+            Color::WHEAT,
         );
         cur_y += step;
         label -= add;
@@ -765,8 +772,10 @@ fn draw_trades(
         // print time labels on x-axis
         match frame {
             Frame::M1 => draw_frames_m1(d, trade.trade_period, &mut day, Vector2::new(x, y), font),
-            Frame::H1 => draw_frames_h1(d, trade.trade_period, &mut day, Vector2::new(x, y)),
-            Frame::D1 => draw_frames_d1(d, trade.trade_period, &mut month, Vector2::new(x, y)),
+            Frame::H1 => draw_frames_h1(d, trade.trade_period, &mut day, Vector2::new(x, y), font),
+            Frame::D1 => {
+                draw_frames_d1(d, trade.trade_period, &mut month, Vector2::new(x, y), font)
+            }
         }
     }
 }
@@ -778,7 +787,7 @@ fn draw_info(d: &mut RaylibDrawHandle, coords: &DrawCoords, font: &Font, info: &
         Vector2::new(coords.end_pos.x - 130.0, coords.start_pos.y),
         15.0,
         0.0,
-        Color::BLACK,
+        Color::WHEAT,
     );
 }
 
