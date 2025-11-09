@@ -1,5 +1,6 @@
 use crate::models::common::{
-    Attempt, AvgPeriod, Candle, Frame, Operation, SecuritiesStr, ToSql, Trade, TradeInfo, TradeView,
+    Attempt, AvgPeriod, Candle, Frame, Operation, SecuritiesStr, StartInfo, ToSql, Trade,
+    TradeInfo, TradeView,
 };
 use chrono::NaiveDateTime;
 use dotenv;
@@ -410,4 +411,32 @@ pub async fn get_average_volume(
         .unwrap();
 
     return result.0;
+}
+
+pub async fn get_start_info(pool: &PgPool) -> StartInfo {
+    let sql = r#"
+select s.code as security_code, a.max_date::timestamp + '10 hours'::interval as time
+from 
+(
+	select s.id, max(c.begin_t::date) as max_date
+	from public.securities as s 
+	inner join public.candles as c on c.security_id = s.id
+	group by s.id
+) as a 
+inner join 
+(
+	select s.id, t.trade_datetime::date as max_date
+	from public.securities as s
+	inner join public.trades as t on t.security_id = s.id
+	group by s.id, max_date
+) as b on a.id = b.id and a.max_date = b.max_date
+inner join public.securities as s on s.id = a.id;
+        "#;
+
+    let result: StartInfo = sqlx::query_as(&sql)
+        .fetch_one(pool)
+        .await
+        .expect("failed to fetch start_info");
+
+    result
 }

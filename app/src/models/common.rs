@@ -299,3 +299,11 @@ impl TradeInfo {
         }
     }
 }
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize, sqlx::FromRow)]
+pub struct StartInfo {
+    pub security_code: String,
+    #[serde(with = "unix_timestamp")]
+    pub time: NaiveDateTime,
+}

@@ -40,14 +40,13 @@ struct UiElements<'a> {
 }
 
 pub async fn run_terminal(pool: &PgPool) {
-    // let mut begin = NaiveDateTime::parse_from_str("2025-04-26 10:00:00", DATE_TIME_FMT)
-    let mut begin = NaiveDateTime::parse_from_str("2025-10-15 10:00:00", DATE_TIME_FMT)
-        .expect("failed to convert datetime");
+    let start_info = pg::get_start_info(pool).await;
+    let mut begin = start_info.time;
     let mut end = begin + Duration::from_secs(60 * 60 * 24 * 1);
 
     let securities = pg::get_securities_str(pool).await;
     let secs: Vec<&str> = securities.split(";").collect();
-    let selected_security = secs[0];
+    let selected_security = &start_info.security_code; //secs[0];
 
     let frames_str = "m1;h1;d1";
     let frames = &frames_str.split(";").collect::<Vec<&str>>();
