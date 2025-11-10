@@ -89,6 +89,15 @@ impl std::fmt::Display for Candle {
     }
 }
 
+impl Candle {
+    pub fn to_info(&self) -> String {
+        format!(
+            "datetime: {}\nopen: {:.2}\nclose: {:.2}\n",
+            self.begin, self.open, self.close
+        )
+    }
+}
+
 pub trait ToSql {
     fn for_insert(&self) -> String;
 }

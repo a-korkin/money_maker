@@ -225,6 +225,7 @@ pub async fn run_terminal(pool: &PgPool) {
             //     current_candle.begin,
             //     current_candle.end,
             //     &Frame::from(current_frame),
+            //     candles.len() as i32,
             // )
             // .await;
         }
@@ -784,7 +785,7 @@ fn draw_info(d: &mut RaylibDrawHandle, coords: &DrawCoords, font: &Font, info: &
     d.draw_text_ex(
         font,
         info,
-        Vector2::new(coords.end_pos.x - 130.0, coords.start_pos.y),
+        Vector2::new(coords.end_pos.x - 200.0, coords.start_pos.y),
         15.0,
         0.0,
         Color::WHEAT,
@@ -810,7 +811,7 @@ fn mouse_click(
                     && mouse_position.x <= candle.position_x.unwrap_or(0.0) + CANDLE_W
                 {
                     *current_candle = candle.clone();
-                    *info = current_candle.to_string();
+                    *info = current_candle.to_info();
                     return true;
                 }
             }
