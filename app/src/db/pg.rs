@@ -155,6 +155,7 @@ pub async fn get_trades_view(
 ) -> Vec<TradeView> {
     let join_str = match frame {
         Frame::M1 => "a.trade_period = b::timestamp",
+        Frame::M15 => "a.trade_period = b::timestamp",
         Frame::H1 => "a.trade_period = b::timestamp",
         Frame::D1 => "a.trade_period::date = b::date",
     };
@@ -192,6 +193,7 @@ pub async fn get_trades_view(
 
     let frame_str = match frame {
         Frame::M1 => "1 min",
+        Frame::M15 => "15 min",
         Frame::H1 => "1 hour",
         Frame::D1 => "1 day",
     };
@@ -265,6 +267,31 @@ pub async fn get_candles(
         and c.end_t <= $3
     order by c.begin_t
     limit $4;
+        "#
+        }
+        Frame::M15 => {
+            r#"
+select a.open, a.close, a.high, a.low, a.value, a.volume, 
+	a.date_int as begin, a.date_int + '15 minutes'::interval - '1 seconds'::interval as end
+from 
+(
+	select 
+	    (array_agg(open order by c.begin_t))[1]::float4 as open, 
+	    (array_agg(close order by c.end_t desc))[1]::float4 as close, 
+	    max(c.high)::float4 as high,
+	    min(c.low)::float4 as low, 
+	    sum(c.value)::float4 as value, 
+	    sum(c.volume)::float4 as volume, 
+		date_bin('15 minutes'::interval, c.begin_t, c.begin_t::date) as date_int
+	from public.candles as c
+	inner join public.securities as s on s.id = c.security_id
+	where s.code = $1
+		and c.begin_t::date >= $2::date
+		and c.end_t::date <= $3::date
+	group by date_int
+) as a
+order by begin
+limit $4;
         "#
         }
         Frame::H1 => {

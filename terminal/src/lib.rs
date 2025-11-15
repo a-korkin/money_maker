@@ -49,7 +49,7 @@ pub async fn run_terminal(pool: &PgPool) {
     let secs: Vec<&str> = securities.split(";").collect();
     let selected_security = &start_info.security_code; //secs[0];
 
-    let frames_str = "m1;h1;d1";
+    let frames_str = "m1;m15;h1;d1";
     let frames = &frames_str.split(";").collect::<Vec<&str>>();
     let mut frame_active: i32 = 0;
     let mut current_frame = frames[frame_active as usize];
@@ -376,6 +376,7 @@ fn draw_graphs(
         // print time labels on x-axis
         match frame {
             Frame::M1 => draw_frames_m1(d, candle.begin, &mut day, Vector2::new(x, y), font),
+            Frame::M15 => draw_frames_m1(d, candle.begin, &mut day, Vector2::new(x, y), font),
             Frame::H1 => draw_frames_h1(d, candle.begin, &mut day, Vector2::new(x, y), font),
             Frame::D1 => draw_frames_d1(d, candle.begin, &mut month, Vector2::new(x, y), font),
         }
@@ -773,6 +774,7 @@ fn draw_trades(
         // print time labels on x-axis
         match frame {
             Frame::M1 => draw_frames_m1(d, trade.trade_period, &mut day, Vector2::new(x, y), font),
+            Frame::M15 => draw_frames_m1(d, trade.trade_period, &mut day, Vector2::new(x, y), font),
             Frame::H1 => draw_frames_h1(d, trade.trade_period, &mut day, Vector2::new(x, y), font),
             Frame::D1 => {
                 draw_frames_d1(d, trade.trade_period, &mut month, Vector2::new(x, y), font)
@@ -785,7 +787,8 @@ fn draw_info(d: &mut RaylibDrawHandle, coords: &DrawCoords, font: &Font, info: &
     d.draw_text_ex(
         font,
         info,
-        Vector2::new(coords.end_pos.x - 200.0, coords.start_pos.y),
+        // Vector2::new(coords.end_pos.x - 200.0, coords.start_pos.y),
+        Vector2::new(25.0, coords.start_pos.y + 200.0),
         15.0,
         0.0,
         Color::WHEAT,
