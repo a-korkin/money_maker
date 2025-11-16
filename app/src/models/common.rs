@@ -318,4 +318,5 @@ pub struct StartInfo {
     pub security_code: String,
     #[serde(with = "unix_timestamp")]
     pub time: NaiveDateTime,
+    pub dates: String,
 }

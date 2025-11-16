@@ -1,6 +1,6 @@
 use app::db::pg;
 use app::models::common::{Candle, Frame, TradeView};
-use chrono::{Datelike, NaiveDateTime, Timelike};
+use chrono::{Datelike, NaiveDate, NaiveDateTime, Timelike};
 use raylib::prelude::GuiControlProperty::*;
 use raylib::prelude::GuiTextAlignment::*;
 use raylib::prelude::*;
@@ -14,6 +14,7 @@ const W: f32 = 1280.0;
 const CANDLE_W: f32 = 12.0;
 const COUNT_Y: f32 = 10.0;
 const DATE_TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
+const DATE_FMT: &str = "%Y-%m-%d";
 const TRADES_DELTA_Y: f32 = 300.0;
 const BACKGROUND_COLOR: Color = Color::new(23, 35, 46, 0);
 
@@ -42,8 +43,6 @@ struct UiElements<'a> {
 
 pub async fn run_terminal(pool: &PgPool) {
     let start_info = pg::get_start_info(pool).await;
-    let mut begin = start_info.time;
-    let mut end = begin + Duration::from_secs(60 * 60 * 24 * 1);
 
     let securities = pg::get_securities_str(pool).await;
     let secs: Vec<&str> = securities.split(";").collect();
@@ -54,6 +53,15 @@ pub async fn run_terminal(pool: &PgPool) {
     let mut frame_active: i32 = 0;
     let mut current_frame = frames[frame_active as usize];
     let mut frame_edit: bool = false;
+
+    let mut date_active: i32 = 0;
+    let mut date_edit: bool = false;
+    let mut dates = &start_info.dates.split(";").collect::<Vec<&str>>();
+    let mut current_date = dates[date_active as usize];
+    let mut begin =
+        NaiveDateTime::parse_from_str(&format!("{} 00:00:00", current_date), DATE_TIME_FMT)
+            .unwrap();
+    let mut end = begin + Duration::from_secs(60 * 60 * 24 * 1);
 
     let data = fetch_data(
         pool,
@@ -121,45 +129,45 @@ pub async fn run_terminal(pool: &PgPool) {
             d.gui_lock();
         }
 
-        if draw_datepicker(
-            &mut d,
-            Vector2::new(25.0, 90.0),
-            &mut ui.begin_str,
-            &mut ui.begin_edit,
-            "BEGIN",
-            &mut begin,
-            &font,
-        ) {
-            (candles, coords) = fetch_data(
-                pool,
-                ui.selected_security,
-                begin,
-                end,
-                &Frame::from(current_frame),
-            )
-            .await
-            .unwrap();
-        }
+        // if draw_datepicker(
+        //     &mut d,
+        //     Vector2::new(25.0, 90.0),
+        //     &mut ui.begin_str,
+        //     &mut ui.begin_edit,
+        //     "BEGIN",
+        //     &mut begin,
+        //     &font,
+        // ) {
+        //     (candles, coords) = fetch_data(
+        //         pool,
+        //         ui.selected_security,
+        //         begin,
+        //         end,
+        //         &Frame::from(current_frame),
+        //     )
+        //     .await
+        //     .unwrap();
+        // }
 
-        if draw_datepicker(
-            &mut d,
-            Vector2::new(25.0, 135.0),
-            &mut ui.end_str,
-            &mut ui.end_edit,
-            "END",
-            &mut end,
-            &font,
-        ) {
-            (candles, coords) = fetch_data(
-                pool,
-                ui.selected_security,
-                begin,
-                end,
-                &Frame::from(current_frame),
-            )
-            .await
-            .unwrap();
-        }
+        // if draw_datepicker(
+        //     &mut d,
+        //     Vector2::new(25.0, 135.0),
+        //     &mut ui.end_str,
+        //     &mut ui.end_edit,
+        //     "END",
+        //     &mut end,
+        //     &font,
+        // ) {
+        //     (candles, coords) = fetch_data(
+        //         pool,
+        //         ui.selected_security,
+        //         begin,
+        //         end,
+        //         &Frame::from(current_frame),
+        //     )
+        //     .await
+        //     .unwrap();
+        // }
 
         if draw_dropdown(
             &mut d,
@@ -193,6 +201,34 @@ pub async fn run_terminal(pool: &PgPool) {
             frame_edit = !frame_edit;
             if frames[frame_active as usize] != current_frame {
                 current_frame = frames[frame_active as usize];
+                (candles, coords) = fetch_data(
+                    pool,
+                    ui.selected_security,
+                    begin,
+                    end,
+                    &Frame::from(current_frame),
+                )
+                .await
+                .unwrap();
+            }
+        }
+
+        if draw_dropdown(
+            &mut d,
+            &start_info.dates,
+            &mut date_active,
+            &mut date_edit,
+            Rectangle::new(25.0, 200.0, 130.0, 30.0),
+        ) {
+            date_edit = !date_edit;
+            if dates[date_active as usize] != current_date {
+                current_date = dates[date_active as usize];
+                begin = NaiveDateTime::parse_from_str(
+                    &format!("{} 00:00:00", current_date),
+                    DATE_TIME_FMT,
+                )
+                .unwrap();
+                end = begin + Duration::from_secs(60 * 60 * 24 * 1);
                 (candles, coords) = fetch_data(
                     pool,
                     ui.selected_security,

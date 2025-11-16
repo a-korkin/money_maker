@@ -442,10 +442,14 @@ pub async fn get_average_volume(
 
 pub async fn get_start_info(pool: &PgPool) -> StartInfo {
     let sql = r#"
-select s.code as security_code, a.max_date::timestamp + '10 hours'::interval as time
+select 
+	s.code as security_code, a.max_date::timestamp + '10 hours'::interval as time,
+	a.dates
 from 
 (
-	select s.id, max(c.begin_t::date) as max_date
+	select 
+		s.id, max(c.begin_t::date) as max_date,
+		string_agg(distinct c.begin_t::date::text, ';') as dates
 	from public.securities as s 
 	inner join public.candles as c on c.security_id = s.id
 	group by s.id
