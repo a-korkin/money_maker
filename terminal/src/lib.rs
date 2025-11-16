@@ -50,7 +50,7 @@ pub async fn run_terminal(pool: &PgPool) {
 
     let frames_str = "m1;m15;h1;d1";
     let frames = &frames_str.split(";").collect::<Vec<&str>>();
-    let mut frame_active: i32 = 0;
+    let mut frame_active: i32 = 1;
     let mut current_frame = frames[frame_active as usize];
     let mut frame_edit: bool = false;
 
@@ -175,6 +175,7 @@ pub async fn run_terminal(pool: &PgPool) {
             &mut ui.securities_active,
             &mut ui.securities_edit,
             Rectangle::new(25.0, 25.0, 80.0, 30.0),
+            false,
         ) {
             ui.securities_edit = !ui.securities_edit;
             if ui.secs[ui.securities_active as usize] != ui.selected_security {
@@ -197,6 +198,7 @@ pub async fn run_terminal(pool: &PgPool) {
             &mut frame_active,
             &mut frame_edit,
             Rectangle::new(110.0, 25.0, 80.0, 30.0),
+            false,
         ) {
             frame_edit = !frame_edit;
             if frames[frame_active as usize] != current_frame {
@@ -213,14 +215,25 @@ pub async fn run_terminal(pool: &PgPool) {
             }
         }
 
+        let bounds = Rectangle::new(25.0, 200.0, 130.0, 30.0);
         if draw_dropdown(
             &mut d,
             &start_info.dates,
             &mut date_active,
             &mut date_edit,
-            Rectangle::new(25.0, 200.0, 130.0, 30.0),
+            bounds,
+            true,
         ) {
             date_edit = !date_edit;
+            // if date_edit {
+            let scrollPanelBounds: Rectangle =
+                Rectangle::new(bounds.x, bounds.y + bounds.height, bounds.width, 150.0);
+
+            let content = Rectangle::new(bounds.x, bounds.y + bounds.height, bounds.width, 200.0);
+            let scroll = Vector2::new(bounds.x, bounds.y);
+            let view = Rectangle::new(bounds.x, bounds.y + bounds.height, bounds.width, 150.0);
+            let _ = d.gui_scroll_panel(scrollPanelBounds, &start_info.dates, content, scroll, view);
+            // }
             if dates[date_active as usize] != current_date {
                 current_date = dates[date_active as usize];
                 begin = NaiveDateTime::parse_from_str(
@@ -239,6 +252,11 @@ pub async fn run_terminal(pool: &PgPool) {
                 .await
                 .unwrap();
             }
+            // let position = Rectangle::new(35.0, 200.0, 130.0, 30.0);
+            // let mut bounds = position;
+            // bounds.height = 500.0;
+            // let scroll = Vector2::new(bounds.x, bounds.y);
+            // d.gui_scroll_panel(bounds, "", bounds, scroll, bounds);
         }
 
         // candles
@@ -249,6 +267,7 @@ pub async fn run_terminal(pool: &PgPool) {
             &mut candles,
             &Frame::from(current_frame),
             &font,
+            &current_candle,
         );
 
         // trades
@@ -267,6 +286,7 @@ pub async fn run_terminal(pool: &PgPool) {
         }
 
         draw_info(&mut d, &coords, &font, &info);
+        // draw_arrow(&mut d, &mut current_candle);
     }
 }
 
@@ -393,6 +413,7 @@ fn draw_graphs(
     candles: &mut Vec<Candle>,
     frame: &Frame,
     font: &Font,
+    current_candle: &Candle,
 ) {
     let y = coords.end_pos.y;
     let mut day: u32 = 0;
@@ -407,6 +428,7 @@ fn draw_graphs(
             coords.start_pos,
             coords.step_y,
             coords.max_y,
+            current_candle,
         );
 
         // print time labels on x-axis
@@ -426,10 +448,13 @@ fn draw_candle(
     start_pos: Vector2,
     step_y: f32,
     max_y: f32,
+    current_candle: &Candle,
 ) {
     let max = f32::max(candle.close, candle.open);
     let min = f32::min(candle.close, candle.open);
-    let color = if candle.close >= candle.open {
+    let color = if candle.begin == current_candle.begin {
+        Color::WHEAT
+    } else if candle.close >= candle.open {
         Color::GREEN
     } else {
         Color::RED
@@ -677,6 +702,7 @@ fn draw_dropdown(
     active: &mut i32,
     edit: &mut bool,
     position: Rectangle,
+    scrolled: bool,
 ) -> bool {
     d.gui_unlock();
     d.gui_set_style(
@@ -684,7 +710,8 @@ fn draw_dropdown(
         TEXT_ALIGNMENT,
         TEXT_ALIGN_CENTER as i32,
     );
-    d.gui_dropdown_box(position, list, active, *edit)
+    let result = d.gui_dropdown_box(position, list, active, *edit);
+    result
 }
 
 fn draw_trades(
@@ -819,12 +846,36 @@ fn draw_trades(
     }
 }
 
+fn draw_arrow(d: &mut RaylibDrawHandle, current_candle: &mut Candle) {
+    if let Some(x) = current_candle.position_x {
+        if let Some(y) = current_candle.position_y {
+            let diff_x = 0.8;
+            let diff_y = 15.0;
+            let start_pos = Vector2::new(x + CANDLE_W / 2.0 - 1.5, 4.0);
+            let end_pos = Vector2::new(x + CANDLE_W / 2.0 - diff_x, y - diff_y);
+            let thick = 2.0;
+
+            // main
+            d.draw_line_ex(start_pos, end_pos, thick, Color::WHEAT);
+
+            // left
+            let start_pos = Vector2::new(x + CANDLE_W / 2.0 - 3.0, y - 22.0);
+            let end_pos = Vector2::new(x + CANDLE_W / 2.0 - diff_x, y - diff_y);
+            d.draw_line_ex(start_pos, end_pos, thick, Color::WHEAT);
+
+            // right
+            let start_pos = Vector2::new(x + CANDLE_W / 2.0 + 1.0, y - 22.0);
+            let end_pos = Vector2::new(x + CANDLE_W / 2.0 - diff_x, y - diff_y);
+            d.draw_line_ex(start_pos, end_pos, thick, Color::WHEAT);
+        }
+    }
+}
+
 fn draw_info(d: &mut RaylibDrawHandle, coords: &DrawCoords, font: &Font, info: &str) {
     d.draw_text_ex(
         font,
         info,
-        // Vector2::new(coords.end_pos.x - 200.0, coords.start_pos.y),
-        Vector2::new(25.0, coords.start_pos.y + 200.0),
+        Vector2::new(25.0, coords.start_pos.y + 220.0),
         15.0,
         0.0,
         Color::WHEAT,
